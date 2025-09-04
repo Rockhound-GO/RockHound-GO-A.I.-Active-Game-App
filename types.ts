@@ -24,3 +24,12 @@ export interface StoreItem {
   price: number;
   icon: string;
 }
+
+export interface JournalEntry {
+  id: string;
+  name: string;
+  description: string;
+  score: number;
+  date: string;
+  imageUrl: string;
+}

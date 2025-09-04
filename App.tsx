@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, LeaderboardEntry } from './types';
+import { GameMessage, MessageAuthor, StoreItem, LeaderboardEntry, JournalEntry } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
 import Header from './components/Header';
 import IdentifyView from './components/IdentifyView';
@@ -9,6 +9,8 @@ import LoadingOverlay from './components/LoadingOverlay';
 import MapScreen from './components/MapScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import StoreScreen from './components/StoreScreen';
+import JournalScreen from './components/JournalScreen';
+import SplashScreen from './components/SplashScreen';
 
 // Mock Data for new features
 const MOCK_LEADERBOARD: LeaderboardEntry[] = [
@@ -26,14 +28,24 @@ const MOCK_STORE: StoreItem[] = [
     { id: '4', name: 'Rare Specimen Case', description: 'Display your best finds with pride.', price: 1500, icon: '📦' },
 ];
 
+const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+};
 
 const App: React.FC = () => {
   const [gameMessages, setGameMessages] = useState<GameMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState('identify');
   const [collectionScore, setCollectionScore] = useState(0);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
 
   const initializeGame = useCallback(() => {
     try {
@@ -47,6 +59,9 @@ const App: React.FC = () => {
     } catch (err) {
       console.error(err);
       setError("Failed to initialize the game session. Please check your API key and refresh the page.");
+    } finally {
+      // Simulate a short delay for splash screen visibility
+      setTimeout(() => setIsInitializing(false), 1500);
     }
   }, []);
 
@@ -56,22 +71,17 @@ const App: React.FC = () => {
 
   const handleSendMessage = async (messageText: string, imageFile?: File) => {
     if (!chatSession || isLoading) return;
-
-    // A text-only message is valid, but an image-based one requires the image.
-    if (!messageText && !imageFile) {
-        return;
-    }
+    if (!messageText && !imageFile) return;
 
     setIsLoading(true);
     setError(null);
     
-    const imageUrl = imageFile ? URL.createObjectURL(imageFile) : undefined;
-    const newUserMessage: GameMessage = { author: MessageAuthor.USER, text: messageText, imageUrl };
+    const persistentImageUrl = imageFile ? await fileToDataUrl(imageFile) : undefined;
+    const newUserMessage: GameMessage = { author: MessageAuthor.USER, text: messageText, imageUrl: persistentImageUrl };
     const newAiMessage: GameMessage = { author: MessageAuthor.AI, text: '' };
     setGameMessages(prev => [...prev, newUserMessage, newAiMessage]);
 
     navigator.geolocation.getCurrentPosition(async (position) => {
-      let tempImageUrl = imageUrl; // Use a temporary variable for the URL to revoke it in finally block
       try {
         const { latitude, longitude } = position.coords;
         const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}.`;
@@ -90,10 +100,24 @@ const App: React.FC = () => {
           });
         }
         
-        // Parse score from the final response
         const scoreMatch = fullResponseText.match(/\[SCORE=(\d+)\]/);
-        if (scoreMatch && scoreMatch[1]) {
-          setCollectionScore(parseInt(scoreMatch[1], 10));
+        const nameMatch = fullResponseText.match(/\[NAME=(.*?)\]/);
+
+        if (scoreMatch && scoreMatch[1] && nameMatch && nameMatch[1] && persistentImageUrl) {
+            const newTotalScore = parseInt(scoreMatch[1], 10);
+            const scoreAwarded = newTotalScore - collectionScore;
+            
+            const newEntry: JournalEntry = {
+                id: new Date().toISOString() + Math.random(),
+                name: nameMatch[1],
+                score: scoreAwarded > 0 ? scoreAwarded : 0,
+                description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]/g, '').trim(),
+                imageUrl: persistentImageUrl,
+                date: new Date().toISOString(),
+            };
+            
+            setJournalEntries(prev => [newEntry, ...prev]);
+            setCollectionScore(newTotalScore);
         }
 
       } catch (err) {
@@ -102,18 +126,12 @@ const App: React.FC = () => {
         setGameMessages(prev => prev.slice(0, -2));
       } finally {
         setIsLoading(false);
-        if (tempImageUrl) {
-            URL.revokeObjectURL(tempImageUrl);
-        }
       }
     }, (err) => {
       console.error(err);
       setError("Could not get your location. Please enable location services for accurate responses.");
       setGameMessages(prev => prev.slice(0, -2));
       setIsLoading(false);
-       if (imageUrl) {
-            URL.revokeObjectURL(imageUrl);
-        }
     });
   };
   
@@ -126,7 +144,6 @@ const App: React.FC = () => {
   const handlePurchase = (item: StoreItem) => {
       if (collectionScore >= item.price) {
           setCollectionScore(prev => prev - item.price);
-          // Here you would typically add the item to user's inventory
           alert(`You purchased ${item.name}!`);
       } else {
           alert("Not enough points!");
@@ -137,6 +154,8 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'map':
         return <MapScreen onChallengeRequest={handleChallengeRequest} />;
+      case 'journal':
+        return <JournalScreen entries={journalEntries} />;
       case 'leaders':
         return <LeaderboardScreen userScore={collectionScore} leaderboardData={MOCK_LEADERBOARD} />;
       case 'store':
@@ -146,6 +165,10 @@ const App: React.FC = () => {
         return <IdentifyView gameMessages={gameMessages} isLoading={isLoading} onSendMessage={handleSendMessage} error={error} />;
     }
   };
+  
+  if (isInitializing) {
+    return <SplashScreen />;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-gray-200 font-sans">

@@ -59,11 +59,13 @@ export async function sendMessageToAIStream(
   imagePart?: Part
 ): Promise<AsyncGenerator<GenerateContentResponse>> {
     
-    const parts = imagePart ? [ { text: message }, imagePart] : [{ text: message }];
+    const parts: Part[] = imagePart ? [ { text: message }, imagePart] : [{ text: message }];
 
-    // Fix for: Argument of type 'Part[]' is not assignable to parameter of type 'SendMessageParameters'.
-    // The `sendMessageStream` method expects an object with a `message` property that holds the array of parts,
-    // not just the parts array directly.
-    const response = await chat.sendMessageStream({ message: parts });
+    // Fix: There is a discrepancy between the TypeScript definition and the runtime behavior for this method.
+    // - The runtime expects the parts array to be passed directly: `chat.sendMessageStream(parts)`.
+    // - The TypeScript checker expects an object wrapper: `chat.sendMessageStream({ message: parts })`.
+    // Using the object wrapper causes an "[object Object]" error.
+    // We use `as any` to bypass the incorrect type definition and send the request in the format the runtime expects.
+    const response = await (chat.sendMessageStream as any)(parts);
     return response;
 }
