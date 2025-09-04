@@ -1,6 +1,6 @@
 {
-  "name": "RockHound-GO: The Text Adventure",
-  "description": "An AI-powered text adventure game where you explore the world, discover rare minerals and crystals, and unravel geological mysteries. Powered by Gemini.",
+  "name": "RockHound GO",
+  "description": "The ultimate real-world rockhounding adventure. Identify, collect, and learn about geological specimens with the power of AI.",
   "requestFramePermissions": [
     "camera"
   ]

@@ -1,25 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, LeaderboardEntry, JournalEntry } from './types';
+import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
+import { ALL_ACHIEVEMENTS } from './achievements';
 import Header from './components/Header';
 import IdentifyView from './components/IdentifyView';
 import BottomNav from './components/BottomNav';
 import LoadingOverlay from './components/LoadingOverlay';
 import MapScreen from './components/MapScreen';
-import LeaderboardScreen from './components/LeaderboardScreen';
+import ListingsScreen from './components/ListingsScreen';
+import ListingDetailModal from './components/ListingDetailModal';
+import NewListingModal from './components/NewListingModal';
 import StoreScreen from './components/StoreScreen';
 import JournalScreen from './components/JournalScreen';
 import SplashScreen from './components/SplashScreen';
+import ProfileScreen from './components/ProfileScreen';
+import AchievementToast from './components/AchievementToast';
+import PurchaseToast from './components/PurchaseToast';
+import { LISTINGS_DATA } from './listingsData';
 
-// Mock Data for new features
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-    { rank: 1, name: 'GeoWizard', score: 12540 },
-    { rank: 2, name: 'CrystalCaver', score: 11820 },
-    { rank: 3, name: 'FossilFinder', score: 9855 },
-    { rank: 4, name: 'Rocky', score: 8500 },
-    { rank: 5, name: 'AgateHunter', score: 7230 },
-];
 
 const MOCK_STORE: StoreItem[] = [
     { id: '1', name: 'Pro Geologist\'s Hammer', description: 'A sturdy hammer for tough rocks.', price: 1000, icon: '🔨' },
@@ -27,6 +26,8 @@ const MOCK_STORE: StoreItem[] = [
     { id: '3', name: 'GPS Field Navigator', description: 'Adds extra details to your map.', price: 2500, icon: '🛰️' },
     { id: '4', name: 'Rare Specimen Case', description: 'Display your best finds with pride.', price: 1500, icon: '📦' },
 ];
+
+const AVATAR_STORAGE_KEY = 'rockhound-go-avatar';
 
 const fileToDataUrl = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -46,6 +47,14 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('identify');
   const [collectionScore, setCollectionScore] = useState(0);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [userAvatar, setUserAvatar] = useState<string>('default');
+  const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
+  const [achievementNotifications, setAchievementNotifications] = useState<Achievement[]>([]);
+  const [purchasedItems, setPurchasedItems] = useState<Set<string>>(new Set());
+  const [purchaseNotifications, setPurchaseNotifications] = useState<StoreItem[]>([]);
+  const [listings, setListings] = useState<LandListing[]>(LISTINGS_DATA);
+  const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
+  const [isNewListingModalOpen, setIsNewListingModalOpen] = useState(false);
 
   const initializeGame = useCallback(() => {
     try {
@@ -56,11 +65,14 @@ const App: React.FC = () => {
         text: "Welcome to RockHound-GO! I'm your Personal AI Rockhound Assistant. Use the camera button on the 'Identify' screen to take or upload a photo of a specimen. Let's see what you've got!"
       };
       setGameMessages([aiWelcomeMessage]);
+      const savedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
+      if (savedAvatar) {
+          setUserAvatar(savedAvatar);
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to initialize the game session. Please check your API key and refresh the page.");
     } finally {
-      // Simulate a short delay for splash screen visibility
       setTimeout(() => setIsInitializing(false), 1500);
     }
   }, []);
@@ -68,6 +80,24 @@ const App: React.FC = () => {
   useEffect(() => {
     initializeGame();
   }, [initializeGame]);
+
+  // Achievement checking logic
+  useEffect(() => {
+    const newlyUnlocked: Achievement[] = [];
+    ALL_ACHIEVEMENTS.forEach(achievement => {
+        if (!unlockedAchievements.has(achievement.id)) {
+            if (achievement.check(journalEntries, collectionScore)) {
+                newlyUnlocked.push(achievement);
+            }
+        }
+    });
+
+    if (newlyUnlocked.length > 0) {
+        setUnlockedAchievements(prev => new Set([...prev, ...newlyUnlocked.map(a => a.id)]));
+        setAchievementNotifications(prev => [...prev, ...newlyUnlocked]);
+        setCollectionScore(prev => prev + newlyUnlocked.reduce((sum, ach) => sum + ach.reward, 0));
+    }
+  }, [journalEntries, collectionScore, unlockedAchievements]);
 
   const handleSendMessage = async (messageText: string, imageFile?: File) => {
     if (!chatSession || isLoading) return;
@@ -102,8 +132,9 @@ const App: React.FC = () => {
         
         const scoreMatch = fullResponseText.match(/\[SCORE=(\d+)\]/);
         const nameMatch = fullResponseText.match(/\[NAME=(.*?)\]/);
+        const rarityMatch = fullResponseText.match(/\[RARITY=(.*?)\]/);
 
-        if (scoreMatch && scoreMatch[1] && nameMatch && nameMatch[1] && persistentImageUrl) {
+        if (scoreMatch?.[1] && nameMatch?.[1] && rarityMatch?.[1] && persistentImageUrl) {
             const newTotalScore = parseInt(scoreMatch[1], 10);
             const scoreAwarded = newTotalScore - collectionScore;
             
@@ -111,9 +142,10 @@ const App: React.FC = () => {
                 id: new Date().toISOString() + Math.random(),
                 name: nameMatch[1],
                 score: scoreAwarded > 0 ? scoreAwarded : 0,
-                description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]/g, '').trim(),
+                description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]|\[RARITY=.*?\]/g, '').trim(),
                 imageUrl: persistentImageUrl,
                 date: new Date().toISOString(),
+                rarity: rarityMatch[1] as Rarity || 'Unknown',
             };
             
             setJournalEntries(prev => [newEntry, ...prev]);
@@ -142,12 +174,35 @@ const App: React.FC = () => {
   }
 
   const handlePurchase = (item: StoreItem) => {
-      if (collectionScore >= item.price) {
+      if (collectionScore >= item.price && !purchasedItems.has(item.id)) {
           setCollectionScore(prev => prev - item.price);
-          alert(`You purchased ${item.name}!`);
-      } else {
-          alert("Not enough points!");
+          setPurchasedItems(prev => new Set(prev).add(item.id));
+          setPurchaseNotifications(prev => [...prev, item]);
       }
+  }
+
+  const handleUpdateAvatar = (avatarId: string) => {
+    setUserAvatar(avatarId);
+    localStorage.setItem(AVATAR_STORAGE_KEY, avatarId);
+  };
+  
+  const handleCreateListing = async (newListingData: Omit<LandListing, 'id' | 'image'>, imageFile: File) => {
+    const imageUrl = await fileToDataUrl(imageFile);
+    const newListing: LandListing = {
+        ...newListingData,
+        id: new Date().toISOString() + Math.random(),
+        image: imageUrl,
+    };
+    setListings(prev => [newListing, ...prev]);
+    setIsNewListingModalOpen(false);
+  };
+
+  const dismissAchievementNotification = (id: string) => {
+    setAchievementNotifications(prev => prev.filter(ach => ach.id !== id));
+  }
+
+  const dismissPurchaseNotification = (id: string) => {
+    setPurchaseNotifications(prev => prev.filter(item => item.id !== id));
   }
 
   const renderCurrentView = () => {
@@ -155,11 +210,23 @@ const App: React.FC = () => {
       case 'map':
         return <MapScreen onChallengeRequest={handleChallengeRequest} />;
       case 'journal':
-        return <JournalScreen entries={journalEntries} />;
-      case 'leaders':
-        return <LeaderboardScreen userScore={collectionScore} leaderboardData={MOCK_LEADERBOARD} />;
+        return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;
+      case 'listings':
+        return <ListingsScreen 
+                    listings={listings} 
+                    onSelectListing={setSelectedListing} 
+                    onOpenNewListingModal={() => setIsNewListingModalOpen(true)}
+                />;
       case 'store':
-        return <StoreScreen storeItems={MOCK_STORE} onPurchase={handlePurchase} userScore={collectionScore} />;
+        return <StoreScreen storeItems={MOCK_STORE} onPurchase={handlePurchase} userScore={collectionScore} purchasedItems={purchasedItems} />;
+      case 'profile':
+        return <ProfileScreen 
+                    journal={journalEntries}
+                    score={collectionScore}
+                    unlockedAchievementIds={unlockedAchievements}
+                    userAvatar={userAvatar} 
+                    onUpdateAvatar={handleUpdateAvatar} 
+                />;
       case 'identify':
       default:
         return <IdentifyView gameMessages={gameMessages} isLoading={isLoading} onSendMessage={handleSendMessage} error={error} />;
@@ -171,13 +238,23 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-gray-200 font-sans">
-      <Header score={collectionScore} />
+    <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-sans">
+      <div className="fixed top-4 right-4 z-50 space-y-2 w-full max-w-sm">
+        {achievementNotifications.map(ach => (
+            <AchievementToast key={ach.id} achievement={ach} onDismiss={() => dismissAchievementNotification(ach.id)} />
+        ))}
+        {purchaseNotifications.map(item => (
+            <PurchaseToast key={item.id} item={item} onDismiss={() => dismissPurchaseNotification(item.id)} />
+        ))}
+      </div>
+      <Header score={collectionScore} avatarId={userAvatar} />
       <main className="flex-1 overflow-hidden">
         {renderCurrentView()}
       </main>
       <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
       {isLoading && <LoadingOverlay />}
+      {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />}
+      {isNewListingModalOpen && <NewListingModal onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}
     </div>
   );
 };

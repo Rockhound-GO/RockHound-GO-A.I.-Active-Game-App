@@ -1,5 +1,6 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, Part } from '@google/genai';
 import { INITIAL_SYSTEM_PROMPT } from '../constants';
+import { LandListing } from '../types';
 
 // A extensible in-memory store for different AI clients, extensible for future use customizing its characteristics unique to each user'
 const clients: { [key: string]: GoogleGenAI } = {};
@@ -58,14 +59,53 @@ export async function sendMessageToAIStream(
   message: string,
   imagePart?: Part
 ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    
-    const parts: Part[] = imagePart ? [ { text: message }, imagePart] : [{ text: message }];
+    // Definitive fix: Send a simple string for text-only, and an array for multi-part.
+    // This avoids an API ambiguity where a single-item array can be misinterpreted.
+    if (imagePart) {
+        const parts: Part[] = [{ text: message }, imagePart];
+        const response = await chat.sendMessageStream({ message: parts });
+        return response;
+    } else {
+        const response = await chat.sendMessageStream({ message });
+        return response;
+    }
+}
 
-    // Fix: There is a discrepancy between the TypeScript definition and the runtime behavior for this method.
-    // - The runtime expects the parts array to be passed directly: `chat.sendMessageStream(parts)`.
-    // - The TypeScript checker expects an object wrapper: `chat.sendMessageStream({ message: parts })`.
-    // Using the object wrapper causes an "[object Object]" error.
-    // We use `as any` to bypass the incorrect type definition and send the request in the format the runtime expects.
-    const response = await (chat.sendMessageStream as any)(parts);
-    return response;
+export async function generateListingDescription(listing: LandListing): Promise<string> {
+    const ai = getGeminiClient();
+    const prompt = `You are an expert copywriter for a premium rockhounding and mineral collecting app. Your task is to transform a landowner's basic property data into a compelling, informative, and safe listing description. The tone should be inviting and professional, highlighting unique features and geological potential. Based on the following data, write a compelling property description. Use a professional and inviting tone, highlight the geological potential, and include a clear summary of the fee and rules.
+
+Input: {
+"propertyName": "${listing.propertyName}",
+"landOwnerName": "${listing.landOwnerName}",
+"location": "${listing.location}",
+"fee": ${listing.fee},
+"mineralsKnown": ["${listing.mineralsKnown.join('", "')}"],
+"accessRules": "${listing.accessRules}",
+"additionalNotes": "${listing.additionalNotes}"
+}`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+    });
+
+    return response.text;
+}
+
+export async function generateMineralEnrichment(mineralName: string, propertyLocation: string): Promise<string> {
+    const ai = getGeminiClient();
+    const prompt = `You are an expert mineralogist and content creator for a mobile app. For a user-selected mineral, write a one-paragraph description that includes its key characteristics (color, hardness), how it forms, a fun historical fact or a notable location where it is found, and a short tip for a rockhound looking for it. The language should be accessible to hobbyists. Based on the provided mineral and location, generate a unique and engaging description of the mineral for a rockhounding app. Make sure to connect the description to the general area if possible.
+
+Input: {
+"mineralName": "${mineralName}",
+"propertyLocation": "${propertyLocation}"
+}`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+    });
+
+    return response.text;
 }

@@ -84,7 +84,7 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
   };
 
   return (
-    <footer className="bg-slate-800/50 p-4 border-t border-slate-700">
+    <footer className="bg-gray-800/50 p-4 border-t border-gray-700">
       <div className="container mx-auto max-w-4xl">
         <form onSubmit={handleSubmit} className="flex items-start space-x-4">
           <input
@@ -99,13 +99,13 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
             type="button"
             onClick={handleCamerClick}
             disabled={isLoading}
-            className="bg-slate-700 text-slate-300 font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-emerald-400"
+            className="bg-gray-700 text-gray-300 font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
           >
            <CameraIcon className="w-6 h-6" />
           </button>
           <div className="flex-1 relative">
             {imagePreview && (
-              <div className="absolute bottom-full left-0 mb-2 p-1 bg-slate-600/50 rounded-lg">
+              <div className="absolute bottom-full left-0 mb-2 p-1 bg-gray-600/50 rounded-lg">
                   <img src={imagePreview} alt="Selected specimen" className="h-20 w-20 object-cover rounded-md"/>
                   <button type="button" onClick={clearImage} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold">&times;</button>
               </div>
@@ -116,13 +116,13 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Add context or ask a question..."
               disabled={isLoading}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 transition-all"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 transition-all"
             />
           </div>
           <button
             type="submit"
             disabled={isLoading || (!imageFile && !inputValue.trim())}
-            className="bg-gradient-to-br from-emerald-500 to-sky-600 text-white font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:from-emerald-600 hover:to-sky-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-emerald-400"
+            className="bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:from-amber-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
           >
            <SendIcon className="w-6 h-6" />
           </button>
