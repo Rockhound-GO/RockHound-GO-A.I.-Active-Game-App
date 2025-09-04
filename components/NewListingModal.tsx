@@ -130,7 +130,12 @@ const NewListingModal: React.FC<NewListingModalProps> = ({ onClose, onCreateList
                     </button>
                     <button 
                         type="submit"
-                        onClick={handleSubmit}
+                        onClick={(e) => {
+                            const form = e.currentTarget.closest('div')?.previousElementSibling as HTMLFormElement;
+                            if(form) {
+                                handleSubmit(e);
+                            }
+                        }}
                         className="bg-amber-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-amber-500 transition-colors"
                     >
                         Create Listing

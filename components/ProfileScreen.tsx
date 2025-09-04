@@ -49,14 +49,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ journal, score, unlockedA
 
     const renderStatistics = () => (
          <div className="container mx-auto max-w-4xl space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatCard label="Total Specimens" value={stats.totalSpecimens} />
                 <StatCard label="Current Score" value={score.toLocaleString()} />
                 <StatCard label="Highest Score" value={stats.highestScore.toLocaleString()} />
             </div>
              <div className="bg-gray-700/50 p-4 rounded-lg">
                  <h3 className="text-lg font-bold text-center text-gray-100 mb-3">Collection by Rarity</h3>
-                 <div className="grid grid-cols-5 gap-2 text-center">
+                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center">
                     {(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] as Rarity[]).map(r => (
                         <div key={r}>
                              <p className="text-sm text-gray-400">{r}</p>

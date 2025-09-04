@@ -239,7 +239,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-sans">
-      <div className="fixed top-4 right-4 z-50 space-y-2 w-full max-w-sm">
+      <div className="fixed top-4 inset-x-4 sm:left-auto sm:right-4 z-50 space-y-2 w-auto max-w-sm">
         {achievementNotifications.map(ach => (
             <AchievementToast key={ach.id} achievement={ach} onDismiss={() => dismissAchievementNotification(ach.id)} />
         ))}

@@ -17,11 +17,11 @@ const ListingsScreen: React.FC<ListingsScreenProps> = ({ listings, onSelectListi
     return (
         <div className="h-full overflow-y-auto p-4 sm:p-6 bg-gray-800/50 animate-fade-in">
             <div className="container mx-auto max-w-4xl">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                     <h2 className="text-3xl font-bold text-gray-100">Private Land Listings</h2>
                     <button 
                         onClick={onOpenNewListingModal}
-                        className="bg-sky-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-500 transition-colors"
+                        className="bg-sky-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-sky-500 transition-colors w-full sm:w-auto"
                     >
                         Add Your Listing
                     </button>

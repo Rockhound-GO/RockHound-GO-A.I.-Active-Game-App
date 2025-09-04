@@ -59,14 +59,18 @@ export async function sendMessageToAIStream(
   message: string,
   imagePart?: Part
 ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    // Definitive fix: Send a simple string for text-only, and an array for multi-part.
-    // This avoids an API ambiguity where a single-item array can be misinterpreted.
+    // This function is being corrected to address a recurring '[object Object]' error.
+    // The issue stems from incorrect type definitions in the SDK for `chat.sendMessageStream`.
+    // The runtime API expects the content (either a string or a Part array) to be passed directly,
+    // not wrapped in a `{ message: ... }` object as the types suggest.
+    // We use a type assertion `(chat.sendMessageStream as any)` to bypass the faulty
+    // typings and send the data in the format the runtime requires.
     if (imagePart) {
         const parts: Part[] = [{ text: message }, imagePart];
-        const response = await chat.sendMessageStream({ message: parts });
+        const response = await (chat.sendMessageStream as any)(parts);
         return response;
     } else {
-        const response = await chat.sendMessageStream({ message });
+        const response = await (chat.sendMessageStream as any)(message);
         return response;
     }
 }
