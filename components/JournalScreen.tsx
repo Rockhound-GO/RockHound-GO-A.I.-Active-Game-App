@@ -1,11 +1,36 @@
 import React, { useState } from 'react';
-import { JournalEntry } from '../types';
+import { JournalEntry, Rarity } from '../types';
 import JournalDetailModal from './JournalDetailModal';
 
 interface JournalScreenProps {
     entries: JournalEntry[];
     onNavigate: () => void;
 }
+
+const getRarityStyles = (rarity: Rarity, element: 'badge' | 'card' = 'badge'): string => {
+    const badgeStyles = {
+        Common: 'bg-gray-500/20 text-gray-300 border-gray-500',
+        Uncommon: 'bg-green-500/20 text-green-300 border-green-500',
+        Rare: 'bg-sky-500/20 text-sky-300 border-sky-500',
+        Epic: 'bg-purple-500/20 text-purple-300 border-purple-500',
+        Legendary: 'bg-amber-500/20 text-amber-300 border-amber-500',
+        Unknown: 'bg-gray-700/20 text-gray-400 border-gray-600',
+    };
+
+    const cardStyles = {
+        Common: 'bg-gray-700/50 border-transparent hover:bg-gray-600/50',
+        Uncommon: 'bg-green-900/20 border-green-500/20 text-green-200 hover:bg-green-800/20 hover:border-green-500/40',
+        Rare: 'bg-sky-900/20 border-sky-500/20 text-sky-200 hover:bg-sky-800/20 hover:border-sky-500/40',
+        Epic: 'bg-purple-900/20 border-purple-500/20 text-purple-200 hover:bg-purple-800/20 hover:border-purple-500/40',
+        Legendary: 'bg-amber-900/20 border-amber-500/20 text-amber-200 hover:bg-amber-800/20 hover:border-amber-500/40',
+        Unknown: 'bg-gray-700/50 border-transparent hover:bg-gray-600/50',
+    };
+
+    if (element === 'card') {
+        return cardStyles[rarity] || cardStyles.Unknown;
+    }
+    return badgeStyles[rarity] || badgeStyles.Unknown;
+};
 
 const CompassIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -45,13 +70,18 @@ const JournalScreen: React.FC<JournalScreenProps> = ({ entries, onNavigate }) =>
                 return (
                     <div
                         key={entry.id}
-                        className="bg-gray-700/50 rounded-lg overflow-hidden group cursor-pointer transform hover:-translate-y-1 transition-transform duration-300"
+                        className={`rounded-lg overflow-hidden group cursor-pointer transform hover:-translate-y-1 transition-all duration-300 border-2 ${getRarityStyles(entry.rarity, 'card')}`}
                         onClick={() => setSelectedEntry(entry)}
                     >
                         <img src={entry.imageUrl} alt={entry.name} className="w-full h-32 object-cover" />
                         <div className="p-3">
-                            <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-amber-300">{entry.name}</h3>
-                            <div className="flex justify-between items-center mt-1">
+                            <div className="flex justify-between items-start">
+                                <h3 className="text-md font-bold text-gray-100 truncate group-hover:text-amber-300 flex-1 mr-2">{entry.name}</h3>
+                                 <span className={`inline-block font-medium rounded-full border px-2 py-0.5 text-xs whitespace-nowrap ${getRarityStyles(entry.rarity, 'badge')}`}>
+                                    {entry.rarity}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center mt-2">
                                 <p className="text-sm text-amber-300">{entry.score} pts</p>
                                 <p className="text-xs text-gray-400">{formattedDate}</p>
                             </div>

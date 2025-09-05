@@ -20,6 +20,11 @@ const ThemePreview: React.FC<{ theme: MapTheme }> = ({ theme }) => (
 
 
 const MapThemeModal: React.FC<MapThemeModalProps> = ({ currentThemeId, onClose, onSelectTheme }) => {
+    
+    const handleSelectTheme = (themeId: string) => {
+        onSelectTheme(themeId);
+    };
+    
     return (
         <div 
             className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in"
@@ -38,7 +43,7 @@ const MapThemeModal: React.FC<MapThemeModalProps> = ({ currentThemeId, onClose, 
                         return (
                             <button 
                                 key={theme.id}
-                                onClick={() => onSelectTheme(theme.id)}
+                                onClick={() => handleSelectTheme(theme.id)}
                                 className={`w-full p-4 rounded-lg flex flex-col items-start transition-all duration-200 ${isActive ? 'bg-amber-500/30 border-2 border-amber-400' : 'bg-gray-700/50 hover:bg-gray-600/50'}`}
                             >
                                 <span className={`font-bold ${isActive ? 'text-amber-300' : 'text-gray-300'}`}>{theme.name}</span>

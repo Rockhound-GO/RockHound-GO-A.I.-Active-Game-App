@@ -6,7 +6,7 @@ import UserInput from './UserInput';
 interface IdentifyViewProps {
     gameMessages: GameMessage[];
     isLoading: boolean;
-    onSendMessage: (message: string, imageFile?: File) => void;
+    onSendMessage: (message: string, imageFiles?: File[]) => void;
     error: string | null;
 }
 

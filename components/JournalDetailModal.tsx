@@ -1,11 +1,29 @@
 import React from 'react';
-import { JournalEntry, Specimen } from '../types';
+import { JournalEntry, Specimen, Rarity } from '../types';
 import { CATALOG_DATA } from '../catalogData';
 
 interface JournalDetailModalProps {
     entry: JournalEntry;
     onClose: () => void;
 }
+
+const getRarityStyles = (rarity: Rarity): string => {
+    switch (rarity) {
+        case 'Common':
+            return 'bg-gray-500/20 text-gray-300 border-gray-500';
+        case 'Uncommon':
+            return 'bg-green-500/20 text-green-300 border-green-500';
+        case 'Rare':
+            return 'bg-sky-500/20 text-sky-300 border-sky-500';
+        case 'Epic':
+            return 'bg-purple-500/20 text-purple-300 border-purple-500';
+        case 'Legendary':
+            return 'bg-amber-500/20 text-amber-300 border-amber-500';
+        case 'Unknown':
+        default:
+            return 'bg-gray-700/20 text-gray-400 border-gray-600';
+    }
+};
 
 const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
     <div className="flex justify-between items-center py-2 border-b border-gray-700/50">
@@ -37,7 +55,12 @@ const JournalDetailModal: React.FC<JournalDetailModalProps> = ({ entry, onClose 
                 <img src={entry.imageUrl} alt={entry.name} className="w-full h-64 object-cover" />
                 <div className="p-6 overflow-y-auto">
                     {/* --- Primary Info --- */}
-                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-orange-400 mb-4">{entry.name}</h2>
+                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-orange-400">{entry.name}</h2>
+                    <div className="mt-1 mb-4">
+                        <span className={`inline-block font-medium rounded-full border px-3 py-1 text-sm ${getRarityStyles(entry.rarity)}`}>
+                            {entry.rarity}
+                        </span>
+                    </div>
                     
                     {specimenData && (
                         <div className="bg-gray-900/50 p-4 rounded-lg mb-4">

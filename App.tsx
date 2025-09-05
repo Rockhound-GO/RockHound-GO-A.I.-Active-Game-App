@@ -99,15 +99,18 @@ const App: React.FC = () => {
     }
   }, [journalEntries, collectionScore, unlockedAchievements]);
 
-  const handleSendMessage = async (messageText: string, imageFile?: File) => {
+  const handleSendMessage = async (messageText: string, imageFiles?: File[]) => {
     if (!chatSession || isLoading) return;
-    if (!messageText && !imageFile) return;
+    if (!messageText && (!imageFiles || imageFiles.length === 0)) return;
 
     setIsLoading(true);
     setError(null);
     
-    const persistentImageUrl = imageFile ? await fileToDataUrl(imageFile) : undefined;
-    const newUserMessage: GameMessage = { author: MessageAuthor.USER, text: messageText, imageUrl: persistentImageUrl };
+    const persistentImageUrls = imageFiles && imageFiles.length > 0
+        ? await Promise.all(imageFiles.map(fileToDataUrl))
+        : undefined;
+        
+    const newUserMessage: GameMessage = { author: MessageAuthor.USER, text: messageText, imageUrls: persistentImageUrls };
     const newAiMessage: GameMessage = { author: MessageAuthor.AI, text: '' };
     setGameMessages(prev => [...prev, newUserMessage, newAiMessage]);
 
@@ -117,8 +120,11 @@ const App: React.FC = () => {
         const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}.`;
         const fullPrompt = `${messageText}\n\n${locationContext}`;
         
-        const imagePart = imageFile ? await fileToGenerativePart(imageFile) : undefined;
-        const stream = await sendMessageToAIStream(chatSession, fullPrompt, imagePart);
+        const imageParts = imageFiles && imageFiles.length > 0
+            ? await Promise.all(imageFiles.map(fileToGenerativePart))
+            : undefined;
+            
+        const stream = await sendMessageToAIStream(chatSession, fullPrompt, imageParts);
         
         let fullResponseText = '';
         for await (const chunk of stream) {
@@ -134,7 +140,7 @@ const App: React.FC = () => {
         const nameMatch = fullResponseText.match(/\[NAME=(.*?)\]/);
         const rarityMatch = fullResponseText.match(/\[RARITY=(.*?)\]/);
 
-        if (scoreMatch?.[1] && nameMatch?.[1] && rarityMatch?.[1] && persistentImageUrl) {
+        if (scoreMatch?.[1] && nameMatch?.[1] && rarityMatch?.[1] && persistentImageUrls?.[0]) {
             const newTotalScore = parseInt(scoreMatch[1], 10);
             const scoreAwarded = newTotalScore - collectionScore;
             
@@ -143,7 +149,7 @@ const App: React.FC = () => {
                 name: nameMatch[1],
                 score: scoreAwarded > 0 ? scoreAwarded : 0,
                 description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]|\[RARITY=.*?\]/g, '').trim(),
-                imageUrl: persistentImageUrl,
+                imageUrl: persistentImageUrls[0], // Use the first image for the journal entry
                 date: new Date().toISOString(),
                 rarity: rarityMatch[1] as Rarity || 'Unknown',
             };

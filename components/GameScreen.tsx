@@ -21,8 +21,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMessages }) => {
         return (
              <div key={index} className="flex justify-end mb-4 animate-fade-in">
                 <div className="bg-sky-800/60 rounded-lg px-4 py-2 max-w-xl text-right">
-                    {msg.imageUrl && (
-                      <img src={msg.imageUrl} alt="User specimen" className="rounded-md mb-2 max-h-48 ml-auto" />
+                    {msg.imageUrls && msg.imageUrls.length > 0 && (
+                        <div className="flex flex-wrap justify-end gap-2 mb-2">
+                            {msg.imageUrls.map((url, i) => (
+                                <img key={i} src={url} alt={`User specimen ${i + 1}`} className="rounded-md max-h-40 object-contain" />
+                            ))}
+                        </div>
                     )}
                     <p>{msg.text}</p>
                 </div>

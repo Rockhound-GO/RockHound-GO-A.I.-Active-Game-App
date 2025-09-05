@@ -7,7 +7,7 @@ export enum MessageAuthor {
 export interface GameMessage {
   author: MessageAuthor;
   text: string;
-  imageUrl?: string;
+  imageUrls?: string[];
 }
 
 export interface LeaderboardEntry {
@@ -77,4 +77,24 @@ export interface LandListing {
   accessRules: string;
   additionalNotes: string;
   image: string;
+}
+
+// --- New Map Feature Types ---
+export enum MapFeatureType {
+    FORMATION = 'FORMATION',
+    DEPOSIT = 'DEPOSIT',
+    POI = 'POI',
+}
+
+export interface MapFeature {
+    id: string;
+    name: string;
+    type: MapFeatureType;
+    position: { top: string; left: string };
+    // For formations
+    size?: { width: string; height: string };
+    color?: string;
+    shape?: 'rect' | 'circle';
+    // For deposits/POIs
+    icon?: 'crystal' | 'quarry' | 'mine';
 }

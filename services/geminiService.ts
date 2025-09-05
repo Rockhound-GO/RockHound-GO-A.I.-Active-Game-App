@@ -57,20 +57,16 @@ export function createGameSession(): Chat {
 export async function sendMessageToAIStream(
   chat: Chat, 
   message: string,
-  imagePart?: Part
+  imageParts?: Part[]
 ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    // This function is being corrected to address a recurring '[object Object]' error.
-    // The issue stems from incorrect type definitions in the SDK for `chat.sendMessageStream`.
-    // The runtime API expects the content (either a string or a Part array) to be passed directly,
-    // not wrapped in a `{ message: ... }` object as the types suggest.
-    // We use a type assertion `(chat.sendMessageStream as any)` to bypass the faulty
-    // typings and send the data in the format the runtime requires.
-    if (imagePart) {
-        const parts: Part[] = [{ text: message }, imagePart];
-        const response = await (chat.sendMessageStream as any)(parts);
+    if (imageParts && imageParts.length > 0) {
+        const parts: Part[] = [{ text: message }, ...imageParts];
+        // FIX: chat.sendMessageStream expects an object with a 'message' property containing the parts.
+        const response = await chat.sendMessageStream({ message: parts });
         return response;
     } else {
-        const response = await (chat.sendMessageStream as any)(message);
+        // FIX: chat.sendMessageStream expects an object with a 'message' property.
+        const response = await chat.sendMessageStream({ message: message });
         return response;
     }
 }
