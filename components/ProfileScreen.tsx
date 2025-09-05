@@ -28,11 +28,12 @@ interface ProfileScreenProps {
     journal: JournalEntry[];
     score: number;
     unlockedAchievementIds: Set<string>;
+    userName: string;
     userAvatar: string;
     onUpdateAvatar: (avatarId: string) => void;
 }
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ journal, score, unlockedAchievementIds, userAvatar, onUpdateAvatar }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ journal, score, unlockedAchievementIds, userName, userAvatar, onUpdateAvatar }) => {
     const [activeTab, setActiveTab] = useState('Statistics');
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
     
@@ -111,7 +112,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ journal, score, unlockedA
                                 <span className="text-white text-xs font-bold">EDIT</span>
                             </div>
                         </button>
-                        <h2 className="mt-3 text-2xl font-bold text-white">Cody</h2>
+                        <h2 className="mt-3 text-2xl font-bold text-white">{userName}</h2>
                     </div>
                 </div>
 

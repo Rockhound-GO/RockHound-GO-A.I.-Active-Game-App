@@ -98,3 +98,17 @@ export interface MapFeature {
     // For deposits/POIs
     icon?: 'crystal' | 'quarry' | 'mine';
 }
+
+export interface User {
+    name: string;
+    avatarId: string;
+    cloverTraits?: {
+        friendliness: number;
+        curiosity: number;
+    };
+}
+
+export interface ChatMessage {
+    author: 'USER' | 'CLOVER';
+    text: string;
+}

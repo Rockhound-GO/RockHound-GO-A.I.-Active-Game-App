@@ -1,7 +1,11 @@
 import React from 'react';
 import AppLogoIcon from './AppLogoIcon';
 
-const SplashScreen: React.FC = () => {
+interface SplashScreenProps {
+    progress: number;
+}
+
+const SplashScreen: React.FC<SplashScreenProps> = ({ progress }) => {
   return (
     <div className="flex flex-col h-screen items-center justify-center bg-gray-900 text-gray-200 animate-fade-in">
         <div className="flex items-center mb-4">
@@ -10,7 +14,13 @@ const SplashScreen: React.FC = () => {
             ROCKHOUND GO
             </h1>
         </div>
-        <p className="text-gray-400">Loading your adventure...</p>
+        <p className="text-gray-400 mb-8">Loading your adventure...</p>
+        <div className="w-1/2 max-w-sm bg-gray-700 rounded-full h-2.5">
+            <div 
+                className="bg-amber-400 h-2.5 rounded-full transition-all duration-500 ease-out" 
+                style={{ width: `${progress}%` }}
+            ></div>
+        </div>
     </div>
   );
 };

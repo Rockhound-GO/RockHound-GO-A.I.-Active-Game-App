@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing } from './types';
+import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
 import { ALL_ACHIEVEMENTS } from './achievements';
 import Header from './components/Header';
@@ -17,8 +17,18 @@ import SplashScreen from './components/SplashScreen';
 import ProfileScreen from './components/ProfileScreen';
 import AchievementToast from './components/AchievementToast';
 import PurchaseToast from './components/PurchaseToast';
+import WelcomeModal from './components/WelcomeModal';
+import MovementControls from './components/MovementControls';
 import { LISTINGS_DATA } from './listingsData';
+import CloverChat from './components/CloverChat';
+import CloverChatButton from './components/CloverChatButton';
+import { INITIAL_SYSTEM_PROMPT } from './constants';
 
+declare global {
+  interface Window {
+    Tone: any; 
+  }
+}
 
 const MOCK_STORE: StoreItem[] = [
     { id: '1', name: 'Pro Geologist\'s Hammer', description: 'A sturdy hammer for tough rocks.', price: 1000, icon: '🔨' },
@@ -27,7 +37,10 @@ const MOCK_STORE: StoreItem[] = [
     { id: '4', name: 'Rare Specimen Case', description: 'Display your best finds with pride.', price: 1500, icon: '📦' },
 ];
 
-const AVATAR_STORAGE_KEY = 'rockhound-go-avatar';
+const USER_STORAGE_KEY = 'rockhound-go-user';
+const MAP_WIDTH = 3000;
+const MAP_HEIGHT = 3000;
+const PLAYER_SPEED = 5;
 
 const fileToDataUrl = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -41,13 +54,13 @@ const fileToDataUrl = (file: File): Promise<string> => {
 const App: React.FC = () => {
   const [gameMessages, setGameMessages] = useState<GameMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState('identify');
   const [collectionScore, setCollectionScore] = useState(0);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [userAvatar, setUserAvatar] = useState<string>('default');
+  const [user, setUser] = useState<User | null>(null);
   const [unlockedAchievements, setUnlockedAchievements] = useState<Set<string>>(new Set());
   const [achievementNotifications, setAchievementNotifications] = useState<Achievement[]>([]);
   const [purchasedItems, setPurchasedItems] = useState<Set<string>>(new Set());
@@ -55,31 +68,98 @@ const App: React.FC = () => {
   const [listings, setListings] = useState<LandListing[]>(LISTINGS_DATA);
   const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
   const [isNewListingModalOpen, setIsNewListingModalOpen] = useState(false);
+  const [playerPosition, setPlayerPosition] = useState({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
+  const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
+  const keysPressed = useRef(new Set<string>());
+  const animationFrameId = useRef<number>();
 
-  const initializeGame = useCallback(() => {
-    try {
-      const chat = createGameSession();
-      setChatSession(chat);
-      const aiWelcomeMessage: GameMessage = {
-        author: MessageAuthor.AI,
-        text: "Welcome to RockHound-GO! I'm your Personal AI Rockhound Assistant. Use the camera button on the 'Identify' screen to take or upload a photo of a specimen. Let's see what you've got!"
-      };
-      setGameMessages([aiWelcomeMessage]);
-      const savedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
-      if (savedAvatar) {
-          setUserAvatar(savedAvatar);
+  useEffect(() => {
+    const playJingle = () => {
+      if (window.Tone) {
+        const synth = new window.Tone.Synth().toDestination();
+        const now = window.Tone.now();
+        synth.triggerAttackRelease('C4', '8n', now);
+        synth.triggerAttackRelease('E4', '8n', now + 0.25);
+        synth.triggerAttackRelease('G4', '8n', now + 0.5);
+        synth.triggerAttackRelease('C5', '4n', now + 0.75);
       }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to initialize the game session. Please check your API key and refresh the page.");
-    } finally {
-      setTimeout(() => setIsInitializing(false), 1500);
-    }
+    };
+
+    const startLoading = async () => {
+      await new Promise(res => setTimeout(res, 500));
+      setLoadingProgress(25);
+      
+      try {
+        const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+        if (savedUser) {
+            setUser(JSON.parse(savedUser));
+        }
+        await new Promise(res => setTimeout(res, 500));
+        setLoadingProgress(50);
+
+        // FIX: Pass INITIAL_SYSTEM_PROMPT to createGameSession to satisfy the function's expected argument.
+        const chat = createGameSession(INITIAL_SYSTEM_PROMPT);
+        setChatSession(chat);
+        const aiWelcomeMessage: GameMessage = {
+          author: MessageAuthor.AI,
+          text: "Welcome to RockHound-GO! I'm Clover A. Cole, your Personal AI Rockhound Assistant. Use the camera button on the 'Identify' screen to take or upload a photo of a specimen. Let's see what you've got!"
+        };
+        setGameMessages([aiWelcomeMessage]);
+        
+        setLoadingProgress(75);
+        await new Promise(res => setTimeout(res, 500));
+
+      } catch (err) {
+        console.error(err);
+        setError("Failed to initialize. Please check your API key and refresh.");
+      } finally {
+        setLoadingProgress(100);
+        await new Promise(res => setTimeout(res, 500));
+        playJingle();
+        setLoadingProgress(101); // Signal completion
+      }
+    };
+
+    startLoading();
+  }, []);
+
+  // Player Movement Game Loop
+  const gameLoop = useCallback(() => {
+      setPlayerPosition(prevPosition => {
+          let { x, y } = prevPosition;
+          const currentKeys = keysPressed.current;
+
+          if (currentKeys.has('ArrowUp') || currentKeys.has('w')) y -= PLAYER_SPEED;
+          if (currentKeys.has('ArrowDown') || currentKeys.has('s')) y += PLAYER_SPEED;
+          if (currentKeys.has('ArrowLeft') || currentKeys.has('a')) x -= PLAYER_SPEED;
+          if (currentKeys.has('ArrowRight') || currentKeys.has('d')) x += PLAYER_SPEED;
+          
+          x = Math.max(0, Math.min(MAP_WIDTH, x));
+          y = Math.max(0, Math.min(MAP_HEIGHT, y));
+
+          return { x, y };
+      });
+      animationFrameId.current = requestAnimationFrame(gameLoop);
   }, []);
 
   useEffect(() => {
-    initializeGame();
-  }, [initializeGame]);
+    const handleKeyDown = (e: KeyboardEvent) => keysPressed.current.add(e.key);
+    const handleKeyUp = (e: KeyboardEvent) => keysPressed.current.delete(e.key);
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    animationFrameId.current = requestAnimationFrame(gameLoop);
+
+    return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+        if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+        }
+    };
+  }, [gameLoop]);
+
 
   // Achievement checking logic
   useEffect(() => {
@@ -149,7 +229,7 @@ const App: React.FC = () => {
                 name: nameMatch[1],
                 score: scoreAwarded > 0 ? scoreAwarded : 0,
                 description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]|\[RARITY=.*?\]/g, '').trim(),
-                imageUrl: persistentImageUrls[0], // Use the first image for the journal entry
+                imageUrl: persistentImageUrls[0],
                 date: new Date().toISOString(),
                 rarity: rarityMatch[1] as Rarity || 'Unknown',
             };
@@ -160,14 +240,14 @@ const App: React.FC = () => {
 
       } catch (err) {
         console.error(err);
-        setError("An error occurred while communicating with the assistant. Please try again.");
+        setError("An error occurred while communicating. Please try again.");
         setGameMessages(prev => prev.slice(0, -2));
       } finally {
         setIsLoading(false);
       }
     }, (err) => {
       console.error(err);
-      setError("Could not get your location. Please enable location services for accurate responses.");
+      setError("Could not get location. Please enable location services.");
       setGameMessages(prev => prev.slice(0, -2));
       setIsLoading(false);
     });
@@ -178,6 +258,21 @@ const App: React.FC = () => {
       handleSendMessage(challengePrompt);
       setCurrentView('identify');
   }
+  
+  const handleOnScreenMove = (direction: 'up' | 'down' | 'left' | 'right') => {
+        setPlayerPosition(prevPosition => {
+            let { x, y } = prevPosition;
+            switch (direction) {
+                case 'up': y -= PLAYER_SPEED * 2; break;
+                case 'down': y += PLAYER_SPEED * 2; break;
+                case 'left': x -= PLAYER_SPEED * 2; break;
+                case 'right': x += PLAYER_SPEED * 2; break;
+            }
+            x = Math.max(0, Math.min(MAP_WIDTH, x));
+            y = Math.max(0, Math.min(MAP_HEIGHT, y));
+            return { x, y };
+        });
+    };
 
   const handlePurchase = (item: StoreItem) => {
       if (collectionScore >= item.price && !purchasedItems.has(item.id)) {
@@ -188,8 +283,24 @@ const App: React.FC = () => {
   }
 
   const handleUpdateAvatar = (avatarId: string) => {
-    setUserAvatar(avatarId);
-    localStorage.setItem(AVATAR_STORAGE_KEY, avatarId);
+    if (user) {
+        const updatedUser = { ...user, avatarId };
+        setUser(updatedUser);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+    }
+  };
+
+  const handleProfileCreate = (name: string) => {
+    const newUser: User = { 
+        name, 
+        avatarId: 'default',
+        cloverTraits: {
+            friendliness: 7,
+            curiosity: 8,
+        }
+    };
+    setUser(newUser);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
   };
   
   const handleCreateListing = async (newListingData: Omit<LandListing, 'id' | 'image'>, imageFile: File) => {
@@ -214,7 +325,13 @@ const App: React.FC = () => {
   const renderCurrentView = () => {
     switch (currentView) {
       case 'map':
-        return <MapScreen onChallengeRequest={handleChallengeRequest} />;
+        return <MapScreen 
+                  onChallengeRequest={handleChallengeRequest} 
+                  playerPosition={playerPosition}
+                  mapWidth={MAP_WIDTH}
+                  mapHeight={MAP_HEIGHT}
+                  avatarId={user!.avatarId}
+                />;
       case 'journal':
         return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;
       case 'listings':
@@ -230,7 +347,8 @@ const App: React.FC = () => {
                     journal={journalEntries}
                     score={collectionScore}
                     unlockedAchievementIds={unlockedAchievements}
-                    userAvatar={userAvatar} 
+                    userName={user!.name}
+                    userAvatar={user!.avatarId} 
                     onUpdateAvatar={handleUpdateAvatar} 
                 />;
       case 'identify':
@@ -239,8 +357,12 @@ const App: React.FC = () => {
     }
   };
   
-  if (isInitializing) {
-    return <SplashScreen />;
+  if (loadingProgress <= 100) {
+    return <SplashScreen progress={loadingProgress} />;
+  }
+
+  if (!user) {
+    return <WelcomeModal onProfileCreate={handleProfileCreate} />;
   }
 
   return (
@@ -253,14 +375,17 @@ const App: React.FC = () => {
             <PurchaseToast key={item.id} item={item} onDismiss={() => dismissPurchaseNotification(item.id)} />
         ))}
       </div>
-      <Header score={collectionScore} avatarId={userAvatar} />
-      <main className="flex-1 overflow-hidden">
+      <Header score={collectionScore} avatarId={user.avatarId} />
+      <main className="flex-1 overflow-hidden relative">
         {renderCurrentView()}
+        {currentView === 'map' && <MovementControls onMove={handleOnScreenMove} />}
       </main>
       <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
       {isLoading && <LoadingOverlay />}
       {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />}
       {isNewListingModalOpen && <NewListingModal onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}
+      <CloverChatButton onClick={() => setIsCloverChatOpen(true)} />
+      {isCloverChatOpen && <CloverChat user={user} onClose={() => setIsCloverChatOpen(false)} />}
     </div>
   );
 };

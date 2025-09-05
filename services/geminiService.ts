@@ -1,6 +1,6 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, Part } from '@google/genai';
 import { INITIAL_SYSTEM_PROMPT } from '../constants';
-import { LandListing } from '../types';
+import { LandListing, User } from '../types';
 
 // A extensible in-memory store for different AI clients, extensible for future use customizing its characteristics unique to each user'
 const clients: { [key: string]: GoogleGenAI } = {};
@@ -40,12 +40,13 @@ export async function fileToGenerativePart(file: File): Promise<Part> {
 }
 
 
-export function createGameSession(): Chat {
+// FIX: Modified function to accept systemInstruction to resolve argument error.
+export function createGameSession(systemInstruction: string): Chat {
   const ai = getGeminiClient();
   const chat = ai.chats.create({
     model: 'gemini-2.5-flash',
     config: {
-      systemInstruction: INITIAL_SYSTEM_PROMPT,
+      systemInstruction: systemInstruction,
       temperature: 0.7,
       topP: 0.9,
       topK: 40,
@@ -59,16 +60,33 @@ export async function sendMessageToAIStream(
   message: string,
   imageParts?: Part[]
 ): Promise<AsyncGenerator<GenerateContentResponse>> {
-    if (imageParts && imageParts.length > 0) {
-        const parts: Part[] = [{ text: message }, ...imageParts];
-        // FIX: chat.sendMessageStream expects an object with a 'message' property containing the parts.
-        const response = await chat.sendMessageStream({ message: parts });
-        return response;
-    } else {
-        // FIX: chat.sendMessageStream expects an object with a 'message' property.
-        const response = await chat.sendMessageStream({ message: message });
-        return response;
-    }
+    // For multipart messages (with images), the payload should be an array of Part objects.
+    // For text-only messages, it's a simple string.
+    const messagePayload = (imageParts && imageParts.length > 0)
+      ? [{ text: message }, ...imageParts]
+      : message;
+      
+    // The `sendMessageStream` method expects an object with a `message` property
+    // containing the payload.
+    return chat.sendMessageStream({ message: messagePayload });
+}
+
+export async function getGeneralChatResponse(message: string, traits: User['cloverTraits']): Promise<string> {
+    const ai = getGeminiClient();
+    const defaultTraits = { friendliness: 7, curiosity: 8 };
+    const currentTraits = traits || defaultTraits;
+
+    const systemPrompt = `You are Clover, a friendly, helpful, and slightly nerdy AI guide for a mineral-sifting game called "RockHound". You are knowledgeable about rocks, minerals, and the local geography. Your personality traits are: Friendliness: ${currentTraits.friendliness}/10 and Curiosity: ${currentTraits.curiosity}/10. Keep your responses concise and in character. Do not perform game actions like identification unless the user explicitly provides an image and asks for it. Focus on being a conversational companion.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: message,
+        config: {
+            systemInstruction: systemPrompt
+        }
+    });
+
+    return response.text;
 }
 
 export async function generateListingDescription(listing: LandListing): Promise<string> {
