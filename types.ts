@@ -112,3 +112,25 @@ export interface ChatMessage {
     author: 'USER' | 'CLOVER';
     text: string;
 }
+
+// --- New Weather Types ---
+export type WeatherIconType = 'sunny' | 'cloudy' | 'rainy' | 'partly-cloudy';
+
+export interface CurrentWeather {
+    temperature: number;
+    description: string;
+    precipitationChance: number;
+    icon: WeatherIconType;
+}
+
+export interface ForecastDay {
+    day: string;
+    temperature: number;
+    description: string;
+    icon: WeatherIconType;
+}
+
+export interface WeatherData {
+    current: CurrentWeather;
+    forecast: ForecastDay[];
+}

@@ -5,6 +5,7 @@ import { MapTheme, MapFeature, MapFeatureType } from '../types';
 import MapThemeModal from './MapThemeModal';
 import MapLayersPanel from './MapLayersPanel';
 import Player from './Player';
+import WeatherWidget from './WeatherWidget';
 import { CrystalClusterIcon, QuarryIcon, MineIcon, POIIcon } from './MapIcons';
 
 interface MapScreenProps {
@@ -13,6 +14,7 @@ interface MapScreenProps {
     mapWidth: number;
     mapHeight: number;
     avatarId: string;
+    currentLocation: { latitude: number; longitude: number; } | null;
 }
 
 const PaintBrushIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -30,7 +32,7 @@ const LayersIcon: React.FC<{ className?: string }> = ({ className }) => (
 const THEME_STORAGE_KEY = 'rockhound-go-map-theme';
 const LAYERS_STORAGE_KEY = 'rockhound-go-map-layers';
 
-const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId }) => {
+const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId, currentLocation }) => {
     const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
     const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
     const [activeThemeId, setActiveThemeId] = useState<string>(() => {
@@ -187,7 +189,13 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                 )}
             </div>
 
-            <div className="absolute top-4 right-4 flex flex-col gap-3 z-30">
+            <div className="absolute top-4 right-4 flex flex-col items-end gap-3 z-30">
+                {currentLocation && (
+                    <WeatherWidget 
+                        latitude={currentLocation.latitude} 
+                        longitude={currentLocation.longitude} 
+                    />
+                )}
                 <button 
                     onClick={() => setIsThemeModalOpen(true)}
                     className="bg-gray-800/50 p-3 rounded-full text-gray-300 hover:bg-gray-700/70 hover:text-white transition-colors"

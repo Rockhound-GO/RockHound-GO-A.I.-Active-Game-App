@@ -69,6 +69,7 @@ const App: React.FC = () => {
   const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
   const [isNewListingModalOpen, setIsNewListingModalOpen] = useState(false);
   const [playerPosition, setPlayerPosition] = useState({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
   const keysPressed = useRef(new Set<string>());
   const animationFrameId = useRef<number>();
@@ -97,7 +98,7 @@ const App: React.FC = () => {
         await new Promise(res => setTimeout(res, 500));
         setLoadingProgress(50);
 
-        // FIX: Pass INITIAL_SYSTEM_PROMPT to createGameSession to satisfy the function's expected argument.
+        // FIX: `createGameSession` expects one argument but was called with zero. Passing `INITIAL_SYSTEM_PROMPT` to fix this.
         const chat = createGameSession(INITIAL_SYSTEM_PROMPT);
         setChatSession(chat);
         const aiWelcomeMessage: GameMessage = {
@@ -121,6 +122,46 @@ const App: React.FC = () => {
     };
 
     startLoading();
+  }, []);
+
+  // Get user location for weather and gameplay
+  useEffect(() => {
+    // Check if geolocation is supported by the browser
+    if (!navigator.geolocation) {
+        setError("Geolocation is not supported by your browser. Location-based features will be unavailable.");
+        return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            setCurrentLocation({ latitude, longitude });
+        },
+        (err) => {
+            // Log the detailed error for debugging
+            console.error("Error getting location:", err);
+            
+            // Set a user-friendly error message
+            let errorMessage = "Could not get your location. Weather and location-based features are disabled.";
+            switch (err.code) {
+                case 1: // PERMISSION_DENIED
+                    errorMessage = "Location permission denied. Please enable it in your browser settings for weather and contextual identification.";
+                    break;
+                case 2: // POSITION_UNAVAILABLE
+                    errorMessage = "Location information is currently unavailable. Please check your network or GPS signal.";
+                    break;
+                case 3: // TIMEOUT
+                    errorMessage = "The request to get your location timed out. Please try again later.";
+                    break;
+            }
+            setError(errorMessage);
+        },
+        { 
+            enableHighAccuracy: true,
+            timeout: 10000, // 10 seconds
+            maximumAge: 60000 // 1 minute
+        }
+    );
   }, []);
 
   // Player Movement Game Loop
@@ -194,9 +235,15 @@ const App: React.FC = () => {
     const newAiMessage: GameMessage = { author: MessageAuthor.AI, text: '' };
     setGameMessages(prev => [...prev, newUserMessage, newAiMessage]);
 
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      try {
-        const { latitude, longitude } = position.coords;
+    if (!currentLocation) {
+        setError("Location not available yet. Please enable location services and try again.");
+        setGameMessages(prev => prev.slice(0, -2));
+        setIsLoading(false);
+        return;
+    }
+
+    try {
+        const { latitude, longitude } = currentLocation;
         const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}.`;
         const fullPrompt = `${messageText}\n\n${locationContext}`;
         
@@ -238,19 +285,13 @@ const App: React.FC = () => {
             setCollectionScore(newTotalScore);
         }
 
-      } catch (err) {
+    } catch (err) {
         console.error(err);
         setError("An error occurred while communicating. Please try again.");
         setGameMessages(prev => prev.slice(0, -2));
-      } finally {
+    } finally {
         setIsLoading(false);
-      }
-    }, (err) => {
-      console.error(err);
-      setError("Could not get location. Please enable location services.");
-      setGameMessages(prev => prev.slice(0, -2));
-      setIsLoading(false);
-    });
+    }
   };
   
   const handleChallengeRequest = () => {
@@ -331,6 +372,7 @@ const App: React.FC = () => {
                   mapWidth={MAP_WIDTH}
                   mapHeight={MAP_HEIGHT}
                   avatarId={user!.avatarId}
+                  currentLocation={currentLocation}
                 />;
       case 'journal':
         return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;

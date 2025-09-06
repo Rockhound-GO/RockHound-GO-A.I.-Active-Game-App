@@ -12,25 +12,27 @@ const ArrowIcon: React.FC<{ rotation: string }> = ({ rotation }) => (
 
 const MovementControls: React.FC<MovementControlsProps> = ({ onMove }) => {
     const [activeDirection, setActiveDirection] = useState<string | null>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const intervalRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (activeDirection) {
             // Immediately trigger first move
             onMove(activeDirection as any);
             
-            intervalRef.current = setInterval(() => {
+            // FIX: Use window.setInterval to ensure the browser's implementation is used, which returns a number,
+            // avoiding type conflicts with NodeJS.Timeout.
+            intervalRef.current = window.setInterval(() => {
                 onMove(activeDirection as any);
             }, 100); // Move every 100ms while held
         } else {
             if (intervalRef.current) {
-                clearInterval(intervalRef.current);
+                window.clearInterval(intervalRef.current);
             }
         }
 
         return () => {
             if (intervalRef.current) {
-                clearInterval(intervalRef.current);
+                window.clearInterval(intervalRef.current);
             }
         };
     }, [activeDirection, onMove]);
