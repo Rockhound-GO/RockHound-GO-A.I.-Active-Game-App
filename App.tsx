@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User } from './types';
+import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User, MapFeature } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
 import { ALL_ACHIEVEMENTS } from './achievements';
 import Header from './components/Header';
@@ -13,6 +13,7 @@ import ListingDetailModal from './components/ListingDetailModal';
 import NewListingModal from './components/NewListingModal';
 import StoreScreen from './components/StoreScreen';
 import JournalScreen from './components/JournalScreen';
+import TradeScreen from './components/TradeScreen';
 import SplashScreen from './components/SplashScreen';
 import ProfileScreen from './components/ProfileScreen';
 import AchievementToast from './components/AchievementToast';
@@ -38,6 +39,7 @@ const MOCK_STORE: StoreItem[] = [
 ];
 
 const USER_STORAGE_KEY = 'rockhound-go-user';
+const GAME_STATE_STORAGE_KEY = 'rockhound-go-gamestate';
 const MAP_WIDTH = 3000;
 const MAP_HEIGHT = 3000;
 const PLAYER_SPEED = 5;
@@ -71,8 +73,10 @@ const App: React.FC = () => {
   const [playerPosition, setPlayerPosition] = useState({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
+  const [userMarkers, setUserMarkers] = useState<MapFeature[]>([]);
   const keysPressed = useRef(new Set<string>());
-  const animationFrameId = useRef<number>();
+  // FIX: Initialize useRef with null to address the "Expected 1 arguments, but got 0" error. This is safer for refs that will hold DOM request IDs.
+  const animationFrameId = useRef<number | null>(null);
 
   useEffect(() => {
     const playJingle = () => {
@@ -93,12 +97,33 @@ const App: React.FC = () => {
       try {
         const savedUser = localStorage.getItem(USER_STORAGE_KEY);
         if (savedUser) {
-            setUser(JSON.parse(savedUser));
+            try {
+                setUser(JSON.parse(savedUser));
+            } catch (e) {
+                console.error("Failed to parse saved user, removing corrupted data.", e);
+                localStorage.removeItem(USER_STORAGE_KEY);
+            }
         }
+
+        const savedGameState = localStorage.getItem(GAME_STATE_STORAGE_KEY);
+        if (savedGameState) {
+            try {
+                const gameState = JSON.parse(savedGameState);
+                setCollectionScore(gameState.collectionScore || 0);
+                setJournalEntries(gameState.journalEntries || []);
+                setUnlockedAchievements(new Set(gameState.unlockedAchievements || []));
+                setPurchasedItems(new Set(gameState.purchasedItems || []));
+                setListings(gameState.listings || LISTINGS_DATA);
+                setPlayerPosition(gameState.playerPosition || { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
+                setUserMarkers(gameState.userMarkers || []);
+            } catch (e) {
+                console.error("Failed to parse saved game state, starting fresh.", e);
+            }
+        }
+
         await new Promise(res => setTimeout(res, 500));
         setLoadingProgress(50);
 
-        // FIX: `createGameSession` expects one argument but was called with zero. Passing `INITIAL_SYSTEM_PROMPT` to fix this.
         const chat = createGameSession(INITIAL_SYSTEM_PROMPT);
         setChatSession(chat);
         const aiWelcomeMessage: GameMessage = {
@@ -124,9 +149,42 @@ const App: React.FC = () => {
     startLoading();
   }, []);
 
+  // Save user profile to localStorage whenever it changes
+  useEffect(() => {
+      if (user) {
+          try {
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+          } catch (error) {
+              console.error("Failed to save user profile:", error);
+          }
+      }
+  }, [user]);
+
+  // Save game state to localStorage whenever it changes
+  useEffect(() => {
+      // Don't save state until the user profile has been loaded/created
+      if (!user) {
+          return;
+      }
+      try {
+          const gameState = {
+              collectionScore,
+              journalEntries,
+              unlockedAchievements: Array.from(unlockedAchievements),
+              purchasedItems: Array.from(purchasedItems),
+              listings,
+              playerPosition,
+              userMarkers,
+          };
+          localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(gameState));
+      } catch (error) {
+          console.error("Failed to save game state:", error);
+      }
+  }, [collectionScore, journalEntries, unlockedAchievements, purchasedItems, listings, playerPosition, userMarkers, user]);
+
+
   // Get user location for weather and gameplay
   useEffect(() => {
-    // Check if geolocation is supported by the browser
     if (!navigator.geolocation) {
         setError("Geolocation is not supported by your browser. Location-based features will be unavailable.");
         return;
@@ -137,24 +195,29 @@ const App: React.FC = () => {
             const { latitude, longitude } = position.coords;
             setCurrentLocation({ latitude, longitude });
         },
-        (err) => {
-            // Log the detailed error for debugging
-            console.error("Error getting location:", err);
-            
-            // Set a user-friendly error message
-            let errorMessage = "Could not get your location. Weather and location-based features are disabled.";
-            switch (err.code) {
-                case 1: // PERMISSION_DENIED
-                    errorMessage = "Location permission denied. Please enable it in your browser settings for weather and contextual identification.";
+        (error: GeolocationPositionError) => {
+            console.error("Geolocation Error Object:", error);
+
+            let userMessage: string;
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    userMessage = "Location permission denied. Please enable it in your browser settings for weather and contextual identification.";
                     break;
-                case 2: // POSITION_UNAVAILABLE
-                    errorMessage = "Location information is currently unavailable. Please check your network or GPS signal.";
+                case error.POSITION_UNAVAILABLE:
+                    userMessage = "Location information is currently unavailable. Please check your network or GPS signal.";
                     break;
-                case 3: // TIMEOUT
-                    errorMessage = "The request to get your location timed out. Please try again later.";
+                case error.TIMEOUT:
+                    userMessage = "The request to get your location timed out. Please try again later.";
+                    break;
+                default:
+                    // More robustly handle the message to prevent "[object Object]"
+                    const errorMessage = typeof error.message === 'string' && error.message.trim() !== '' 
+                        ? error.message 
+                        : 'An unknown error occurred.';
+                    userMessage = `Could not get your location: ${errorMessage}. Location-based features are disabled.`;
                     break;
             }
-            setError(errorMessage);
+            setError(userMessage);
         },
         { 
             enableHighAccuracy: true,
@@ -327,7 +390,6 @@ const App: React.FC = () => {
     if (user) {
         const updatedUser = { ...user, avatarId };
         setUser(updatedUser);
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
     }
   };
 
@@ -341,7 +403,6 @@ const App: React.FC = () => {
         }
     };
     setUser(newUser);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
   };
   
   const handleCreateListing = async (newListingData: Omit<LandListing, 'id' | 'image'>, imageFile: File) => {
@@ -354,6 +415,19 @@ const App: React.FC = () => {
     setListings(prev => [newListing, ...prev]);
     setIsNewListingModalOpen(false);
   };
+  
+  const handleTradeComplete = (userGave: JournalEntry, userReceived: JournalEntry) => {
+    setJournalEntries(prev => {
+        // Remove the item the user gave away
+        const filtered = prev.filter(entry => entry.id !== userGave.id);
+        // Add the item the user received
+        return [userReceived, ...filtered];
+    });
+
+    // Adjust score based on the difference in item values
+    setCollectionScore(prev => prev - userGave.score + userReceived.score);
+  };
+
 
   const dismissAchievementNotification = (id: string) => {
     setAchievementNotifications(prev => prev.filter(ach => ach.id !== id));
@@ -373,9 +447,17 @@ const App: React.FC = () => {
                   mapHeight={MAP_HEIGHT}
                   avatarId={user!.avatarId}
                   currentLocation={currentLocation}
+                  userMarkers={userMarkers}
+                  setUserMarkers={setUserMarkers}
                 />;
       case 'journal':
         return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;
+      case 'trade':
+        return <TradeScreen
+                    userJournal={journalEntries}
+                    onTradeComplete={handleTradeComplete}
+                    chatSession={chatSession}
+                />;
       case 'listings':
         return <ListingsScreen 
                     listings={listings} 

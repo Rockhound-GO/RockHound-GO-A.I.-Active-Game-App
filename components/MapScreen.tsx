@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MAP_THEMES } from '../mapThemes';
 import { MAP_FEATURES } from '../mapData';
-import { MapTheme, MapFeature, MapFeatureType } from '../types';
+import { MapTheme, MapFeature, MapFeatureType, WeatherData } from '../types';
 import MapThemeModal from './MapThemeModal';
 import MapLayersPanel from './MapLayersPanel';
 import Player from './Player';
 import WeatherWidget from './WeatherWidget';
-import { CrystalClusterIcon, QuarryIcon, MineIcon, POIIcon } from './MapIcons';
+import { CrystalClusterIcon, QuarryIcon, MineIcon, POIIcon, UserPOIIcon, ScoutIcon } from './MapIcons';
+import { generateMapMarker } from '../services/geminiService';
+import { getWeatherForLocation } from '../services/weatherService';
+import WeatherEffects from './WeatherEffects';
 
 interface MapScreenProps {
     onChallengeRequest: () => void;
@@ -15,6 +18,8 @@ interface MapScreenProps {
     mapHeight: number;
     avatarId: string;
     currentLocation: { latitude: number; longitude: number; } | null;
+    userMarkers: MapFeature[];
+    setUserMarkers: React.Dispatch<React.SetStateAction<MapFeature[]>>;
 }
 
 const PaintBrushIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -32,7 +37,7 @@ const LayersIcon: React.FC<{ className?: string }> = ({ className }) => (
 const THEME_STORAGE_KEY = 'rockhound-go-map-theme';
 const LAYERS_STORAGE_KEY = 'rockhound-go-map-layers';
 
-const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId, currentLocation }) => {
+const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId, currentLocation, userMarkers, setUserMarkers }) => {
     const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
     const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
     const [activeThemeId, setActiveThemeId] = useState<string>(() => {
@@ -51,9 +56,13 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
             [MapFeatureType.FORMATION]: true,
             [MapFeatureType.DEPOSIT]: true,
             [MapFeatureType.POI]: true,
+            [MapFeatureType.USER_POI]: true,
         };
     });
     const [hoveredFeature, setHoveredFeature] = useState<MapFeature | null>(null);
+    const [isScouting, setIsScouting] = useState(false);
+    const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+    const [isWeatherLoading, setIsWeatherLoading] = useState(true);
     const viewportRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -63,12 +72,69 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
     useEffect(() => {
         localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(activeLayers));
     }, [activeLayers]);
+    
+     useEffect(() => {
+        if (!currentLocation) return;
+
+        const fetchWeather = async () => {
+            setIsWeatherLoading(true);
+            try {
+                const data = await getWeatherForLocation(currentLocation.latitude, currentLocation.longitude);
+                setWeatherData(data);
+            } catch (err) {
+                console.error("Failed to fetch weather data in MapScreen:", err);
+                setWeatherData(null);
+            } finally {
+                setIsWeatherLoading(false);
+            }
+        };
+
+        fetchWeather();
+    }, [currentLocation]);
+
 
     const activeTheme = MAP_THEMES.find(t => t.id === activeThemeId) || MAP_THEMES[0];
 
     const toggleLayer = (layer: MapFeatureType) => {
         setActiveLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
     };
+
+    const handleAiScout = async () => {
+        setIsScouting(true);
+        try {
+            const mapContext = "The user is exploring a simulated world map with varied geological features like sedimentary formations and igneous intrusions. They are looking for interesting and unique places to investigate.";
+            const markerData = await generateMapMarker(mapContext);
+
+            // Generate a random position near the player
+            const angle = Math.random() * 2 * Math.PI;
+            const radius = 150 + Math.random() * 150; // Place it 150-300 pixels away
+            const newX = playerPosition.x + radius * Math.cos(angle);
+            const newY = playerPosition.y + radius * Math.sin(angle);
+            
+            // Clamp within map bounds
+            const clampedX = Math.max(50, Math.min(mapWidth - 50, newX));
+            const clampedY = Math.max(50, Math.min(mapHeight - 50, newY));
+
+            const newMarker: MapFeature = {
+                id: `user-${Date.now()}`,
+                name: markerData.name,
+                description: markerData.description,
+                type: MapFeatureType.USER_POI,
+                position: {
+                    top: `${(clampedY / mapHeight) * 100}%`,
+                    left: `${(clampedX / mapWidth) * 100}%`,
+                },
+            };
+
+            setUserMarkers(prev => [...prev, newMarker]);
+
+        } catch (error) {
+            console.error("Failed to generate AI map marker:", error);
+        } finally {
+            setIsScouting(false);
+        }
+    };
+
 
     const renderFeature = (feature: MapFeature) => {
         const featureStyle: React.CSSProperties = {
@@ -128,12 +194,24 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                        <Icon className={`w-10 h-10 text-sky-300 drop-shadow-lg`} />
                     </div>
                 );
+            case MapFeatureType.USER_POI:
+                return (
+                    <div
+                        key={feature.id}
+                        style={{ ...featureStyle, pointerEvents: 'all' }}
+                        onMouseEnter={onMouseEnter}
+                        onMouseLeave={onMouseLeave}
+                        className="p-2"
+                    >
+                        <UserPOIIcon className={`w-10 h-10 text-green-400 drop-shadow-lg animate-pulse`} />
+                    </div>
+                );
             default:
                 return null;
         }
     };
 
-    const visibleFeatures = MAP_FEATURES.filter(f => activeLayers[f.type]);
+    const visibleFeatures = [...MAP_FEATURES, ...userMarkers].filter(f => activeLayers[f.type]);
 
     const cameraX = (viewportRef.current?.offsetWidth ?? 0) / 2 - playerPosition.x;
     const cameraY = (viewportRef.current?.offsetHeight ?? 0) / 2 - playerPosition.y;
@@ -145,6 +223,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                 className="w-full h-full relative overflow-hidden"
                 style={{ backgroundColor: activeTheme.colors.background }}
             >
+                 <WeatherEffects weather={weatherData?.current.icon} />
                 <div
                     className="absolute top-0 left-0 transition-transform duration-100 ease-linear"
                     style={{
@@ -177,14 +256,17 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
 
                  {hoveredFeature && (
                     <div 
-                        className="absolute z-20 bg-gray-900/80 text-white text-sm px-3 py-1 rounded-md shadow-lg pointer-events-none transition-opacity"
+                        className="absolute z-20 bg-gray-900/80 text-white px-3 py-2 rounded-md shadow-lg pointer-events-none transition-opacity max-w-xs backdrop-blur-sm"
                         style={{
                             top: `${cameraY + (parseFloat(hoveredFeature.position.top) / 100) * mapHeight - 40}px`,
                             left: `${cameraX + (parseFloat(hoveredFeature.position.left) / 100) * mapWidth}px`,
                             transform: 'translateX(-50%)',
                         }}
                     >
-                        {hoveredFeature.name}
+                        <p className="font-bold text-base">{hoveredFeature.name}</p>
+                        {hoveredFeature.description && (
+                            <p className="text-gray-300 mt-1 text-sm">{hoveredFeature.description}</p>
+                        )}
                     </div>
                 )}
             </div>
@@ -192,8 +274,8 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
             <div className="absolute top-4 right-4 flex flex-col items-end gap-3 z-30">
                 {currentLocation && (
                     <WeatherWidget 
-                        latitude={currentLocation.latitude} 
-                        longitude={currentLocation.longitude} 
+                        weatherData={weatherData}
+                        isLoading={isWeatherLoading}
                     />
                 )}
                 <button 
@@ -209,6 +291,18 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                     aria-label="Toggle Map Layers"
                 >
                     <LayersIcon className="w-6 h-6" />
+                </button>
+                <button 
+                    onClick={handleAiScout}
+                    disabled={isScouting}
+                    className="bg-gray-800/50 p-3 rounded-full text-gray-300 hover:bg-gray-700/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    aria-label="Use AI Scout"
+                >
+                    {isScouting ? (
+                        <div className="w-6 h-6 border-2 border-gray-400 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                        <ScoutIcon className="w-6 h-6" />
+                    )}
                 </button>
             </div>
             

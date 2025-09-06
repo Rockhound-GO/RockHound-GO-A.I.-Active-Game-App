@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MAP_THEMES } from '../mapThemes';
 import { MapTheme } from '../types';
 
@@ -20,9 +20,11 @@ const ThemePreview: React.FC<{ theme: MapTheme }> = ({ theme }) => (
 
 
 const MapThemeModal: React.FC<MapThemeModalProps> = ({ currentThemeId, onClose, onSelectTheme }) => {
+    const [selectedThemeId, setSelectedThemeId] = useState(currentThemeId);
     
-    const handleSelectTheme = (themeId: string) => {
-        onSelectTheme(themeId);
+    const handleApply = () => {
+        onSelectTheme(selectedThemeId);
+        onClose();
     };
     
     return (
@@ -39,11 +41,11 @@ const MapThemeModal: React.FC<MapThemeModalProps> = ({ currentThemeId, onClose, 
                 </div>
                 <div className="p-6 space-y-4">
                     {MAP_THEMES.map(theme => {
-                        const isActive = theme.id === currentThemeId;
+                        const isActive = theme.id === selectedThemeId;
                         return (
                             <button 
                                 key={theme.id}
-                                onClick={() => handleSelectTheme(theme.id)}
+                                onClick={() => setSelectedThemeId(theme.id)}
                                 className={`w-full p-4 rounded-lg flex flex-col items-start transition-all duration-200 ${isActive ? 'bg-amber-500/30 border-2 border-amber-400' : 'bg-gray-700/50 hover:bg-gray-600/50'}`}
                             >
                                 <span className={`font-bold ${isActive ? 'text-amber-300' : 'text-gray-300'}`}>{theme.name}</span>
@@ -52,12 +54,18 @@ const MapThemeModal: React.FC<MapThemeModalProps> = ({ currentThemeId, onClose, 
                         );
                     })}
                 </div>
-                 <div className="p-4 bg-gray-900/50 border-t border-gray-700 text-right">
+                 <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex justify-end gap-3">
                      <button 
                         onClick={onClose}
                         className="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-500 transition-colors"
                      >
                         Close
+                    </button>
+                    <button 
+                        onClick={handleApply}
+                        className="bg-amber-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-amber-500 transition-colors"
+                    >
+                        Apply
                     </button>
                 </div>
             </div>

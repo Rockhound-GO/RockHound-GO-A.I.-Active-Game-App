@@ -1,36 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { WeatherData } from '../types';
-import { getWeatherForLocation } from '../services/weatherService';
 import { WeatherIcon } from './WeatherIcons';
 
 interface WeatherWidgetProps {
-    latitude: number;
-    longitude: number;
+    weatherData: WeatherData | null;
+    isLoading: boolean;
 }
 
-const WeatherWidget: React.FC<WeatherWidgetProps> = ({ latitude, longitude }) => {
-    const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+const WeatherWidget: React.FC<WeatherWidgetProps> = ({ weatherData, isLoading }) => {
     const [isOpen, setIsOpen] = useState(false);
-
-    useEffect(() => {
-        const fetchWeather = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const data = await getWeatherForLocation(latitude, longitude);
-                setWeatherData(data);
-            } catch (err) {
-                setError('Could not fetch weather data.');
-                console.error(err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchWeather();
-    }, [latitude, longitude]);
 
     if (isLoading) {
         return (
@@ -40,7 +18,7 @@ const WeatherWidget: React.FC<WeatherWidgetProps> = ({ latitude, longitude }) =>
         );
     }
 
-    if (error || !weatherData) {
+    if (!weatherData) {
         return null; // Or some error indicator
     }
     

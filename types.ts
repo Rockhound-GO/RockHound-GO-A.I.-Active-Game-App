@@ -84,6 +84,7 @@ export enum MapFeatureType {
     FORMATION = 'FORMATION',
     DEPOSIT = 'DEPOSIT',
     POI = 'POI',
+    USER_POI = 'USER_POI',
 }
 
 export interface MapFeature {
@@ -91,6 +92,7 @@ export interface MapFeature {
     name: string;
     type: MapFeatureType;
     position: { top: string; left: string };
+    description?: string;
     // For formations
     size?: { width: string; height: string };
     color?: string;

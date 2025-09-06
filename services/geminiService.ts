@@ -1,6 +1,6 @@
-import { GoogleGenAI, Chat, GenerateContentResponse, Part } from '@google/genai';
+import { GoogleGenAI, Chat, GenerateContentResponse, Part, Type } from '@google/genai';
 import { INITIAL_SYSTEM_PROMPT } from '../constants';
-import { LandListing, User } from '../types';
+import { LandListing, User, JournalEntry } from '../types';
 
 // A extensible in-memory store for different AI clients, extensible for future use customizing its characteristics unique to each user'
 const clients: { [key: string]: GoogleGenAI } = {};
@@ -71,6 +71,24 @@ export async function sendMessageToAIStream(
     return chat.sendMessageStream({ message: messagePayload });
 }
 
+export async function evaluateTrade(
+    chat: Chat,
+    userOffer: JournalEntry,
+    cloverRequest: JournalEntry
+): Promise<string> {
+    const prompt = `
+        I would like to propose a trade.
+        My Offer: ${userOffer.name} (Rarity: ${userOffer.rarity}, Score: ${userOffer.score})
+        Your Item: ${cloverRequest.name} (Rarity: ${cloverRequest.rarity}, Score: ${cloverRequest.score})
+        What do you think?
+    `;
+
+    // We use a non-streaming call for the trade evaluation
+    const response = await chat.sendMessage({ message: prompt });
+    return response.text;
+}
+
+
 export async function getGeneralChatResponse(message: string, traits: User['cloverTraits']): Promise<string> {
     const ai = getGeminiClient();
     const defaultTraits = { friendliness: 7, curiosity: 8 };
@@ -87,6 +105,53 @@ export async function getGeneralChatResponse(message: string, traits: User['clov
     });
 
     return response.text;
+}
+
+export async function generateMapMarker(mapContext: string): Promise<{ name: string; description: string; }> {
+    const ai = getGeminiClient();
+    const prompt = `You are a creative geologist for the game "RockHound GO". Based on the following context, invent a plausible and interesting fictional point of interest for a player to discover on their map.
+    
+    Context: "${mapContext}"
+
+    Provide a name and a short, engaging description for this point of interest. The tone should be mysterious and exciting.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    name: {
+                        type: Type.STRING,
+                        description: "A creative and short name for the point of interest (e.g., 'Whispering Geode Cavern', 'Ancient Leviathan Ribcage')."
+                    },
+                    description: {
+                        type: Type.STRING,
+                        description: "A one or two-sentence intriguing description of the location, hinting at what might be found there."
+                    }
+                },
+                required: ["name", "description"]
+            },
+        }
+    });
+
+    try {
+        const jsonText = response.text.trim();
+        const data = JSON.parse(jsonText);
+        return {
+            name: data.name || "Mysterious Anomaly",
+            description: data.description || "An unusual geological reading from this location. Worth investigating."
+        };
+    } catch (e) {
+        console.error("Failed to parse AI response for map marker:", e);
+        // Fallback in case of parsing error
+        return {
+            name: "Unusual Signal",
+            description: "AI scout detected something strange here, but the data was corrupted. Could be anything!",
+        };
+    }
 }
 
 export async function generateListingDescription(listing: LandListing): Promise<string> {
