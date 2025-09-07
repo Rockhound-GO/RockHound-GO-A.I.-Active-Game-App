@@ -2,10 +2,7 @@ import React from 'react';
 import AvatarIcon from './AvatarIcon';
 
 interface PlayerProps {
-    position: {
-        x: number;
-        y: number;
-    };
+    position: { x: number; y: number };
     avatarId: string;
 }
 
@@ -16,14 +13,17 @@ const Player: React.FC<PlayerProps> = ({ position, avatarId }) => {
             style={{
                 left: `${position.x}px`,
                 top: `${position.y}px`,
-                transform: 'translate(-50%, -50%)', // Center the player on the position
-                transition: 'top 0.1s linear, left 0.1s linear'
+                transform: 'translate(-50%, -50%)',
             }}
         >
-            <div className="w-12 h-12 rounded-full bg-sky-500/50 border-2 border-white flex items-center justify-center shadow-lg">
-                 <AvatarIcon avatarId={avatarId} className="w-8 h-8 text-white" />
+            <div className="relative flex items-center justify-center">
+                {/* Pulsing circle for presence */}
+                <div className="absolute w-12 h-12 bg-sky-400/50 rounded-full animate-ping opacity-75"></div>
+                {/* Main player icon container */}
+                <div className="relative w-10 h-10 bg-gray-800 rounded-full border-2 border-sky-300 flex items-center justify-center shadow-lg">
+                     <AvatarIcon avatarId={avatarId} className="w-6 h-6 text-white" />
+                </div>
             </div>
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-black/30 rounded-full blur-sm"></div>
         </div>
     );
 };

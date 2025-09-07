@@ -19,11 +19,13 @@ import ProfileScreen from './components/ProfileScreen';
 import AchievementToast from './components/AchievementToast';
 import PurchaseToast from './components/PurchaseToast';
 import WelcomeModal from './components/WelcomeModal';
-import MovementControls from './components/MovementControls';
+import VirtualJoystick from './components/VirtualJoystick';
 import { LISTINGS_DATA } from './listingsData';
 import CloverChat from './components/CloverChat';
 import CloverChatButton from './components/CloverChatButton';
 import { INITIAL_SYSTEM_PROMPT } from './constants';
+import LiveAssistButton from './components/LiveAssistButton';
+import LiveAssistModal from './components/LiveAssistModal';
 
 declare global {
   interface Window {
@@ -53,6 +55,29 @@ const fileToDataUrl = (file: File): Promise<string> => {
     });
 };
 
+// A robust utility to get a user-friendly error message from a geolocation error.
+const getGeolocationErrorMessage = (error: any): string => {
+    console.error("Geolocation Error Object:", error);
+
+    if (error && typeof error.code === 'number') {
+        switch (error.code) {
+            case 1: // PERMISSION_DENIED
+                return "Location access denied. Please enable location permissions in your browser settings to use map features.";
+            case 2: // POSITION_UNAVAILABLE
+                return "Your location is currently unavailable. Please check your network connection or move to an area with a better GPS signal.";
+            case 3: // TIMEOUT
+                return "Getting your location took too long. Please try again.";
+            default:
+                return `An unknown location error occurred. Code: ${error.code}`;
+        }
+    }
+    if (error && typeof error.message === 'string' && error.message.length > 0) {
+        return error.message;
+    }
+    return "An unexpected issue occurred while accessing your location. Please ensure location services are enabled and try again.";
+};
+
+
 const App: React.FC = () => {
   const [gameMessages, setGameMessages] = useState<GameMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,6 +98,7 @@ const App: React.FC = () => {
   const [playerPosition, setPlayerPosition] = useState({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
+  const [isLiveAssistOpen, setIsLiveAssistOpen] = useState(false);
   const [userMarkers, setUserMarkers] = useState<MapFeature[]>([]);
   const keysPressed = useRef(new Set<string>());
   // FIX: Initialize useRef with null to address the "Expected 1 arguments, but got 0" error. This is safer for refs that will hold DOM request IDs.
@@ -195,29 +221,8 @@ const App: React.FC = () => {
             const { latitude, longitude } = position.coords;
             setCurrentLocation({ latitude, longitude });
         },
-        (error: GeolocationPositionError) => {
-            console.error("Geolocation Error Object:", error);
-
-            let userMessage: string;
-            switch (error.code) {
-                case error.PERMISSION_DENIED:
-                    userMessage = "Location permission denied. Please enable it in your browser settings for weather and contextual identification.";
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    userMessage = "Location information is currently unavailable. Please check your network or GPS signal.";
-                    break;
-                case error.TIMEOUT:
-                    userMessage = "The request to get your location timed out. Please try again later.";
-                    break;
-                default:
-                    // More robustly handle the message to prevent "[object Object]"
-                    const errorMessage = typeof error.message === 'string' && error.message.trim() !== '' 
-                        ? error.message 
-                        : 'An unknown error occurred.';
-                    userMessage = `Could not get your location: ${errorMessage}. Location-based features are disabled.`;
-                    break;
-            }
-            setError(userMessage);
+        (error: any) => {
+            setError(getGeolocationErrorMessage(error));
         },
         { 
             enableHighAccuracy: true,
@@ -307,7 +312,10 @@ const App: React.FC = () => {
 
     try {
         const { latitude, longitude } = currentLocation;
-        const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}.`;
+        const userTraitsContext = user?.cloverTraits 
+            ? `My user profile traits are Friendliness: ${user.cloverTraits.friendliness}, Curiosity: ${user.cloverTraits.curiosity}.`
+            : '';
+        const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}. ${userTraitsContext}`;
         const fullPrompt = `${messageText}\n\n${locationContext}`;
         
         const imageParts = imageFiles && imageFiles.length > 0
@@ -366,11 +374,12 @@ const App: React.FC = () => {
   const handleOnScreenMove = (direction: 'up' | 'down' | 'left' | 'right') => {
         setPlayerPosition(prevPosition => {
             let { x, y } = prevPosition;
+            const moveAmount = PLAYER_SPEED * 1.5; // Make joystick slightly faster than key press
             switch (direction) {
-                case 'up': y -= PLAYER_SPEED * 2; break;
-                case 'down': y += PLAYER_SPEED * 2; break;
-                case 'left': x -= PLAYER_SPEED * 2; break;
-                case 'right': x += PLAYER_SPEED * 2; break;
+                case 'up': y -= moveAmount; break;
+                case 'down': y += moveAmount; break;
+                case 'left': x -= moveAmount; break;
+                case 'right': x += moveAmount; break;
             }
             x = Math.max(0, Math.min(MAP_WIDTH, x));
             y = Math.max(0, Math.min(MAP_HEIGHT, y));
@@ -437,6 +446,20 @@ const App: React.FC = () => {
     setPurchaseNotifications(prev => prev.filter(item => item.id !== id));
   }
 
+  const generateScreenContext = (): string => {
+        let context = `Current View: ${currentView}. Score: ${collectionScore}. Player Position on Map: (x: ${Math.round(playerPosition.x)}, y: ${Math.round(playerPosition.y)}).`;
+        if (currentView === 'journal') {
+            context += ` There are ${journalEntries.length} items in the journal.`;
+        }
+        if (currentView === 'map') {
+            context += ` The current location is ${currentLocation ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}` : 'unknown'}.`;
+        }
+        if (selectedListing) {
+            context += ` Currently viewing listing: ${selectedListing.propertyName}.`;
+        }
+        return context;
+    };
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'map':
@@ -502,14 +525,16 @@ const App: React.FC = () => {
       <Header score={collectionScore} avatarId={user.avatarId} />
       <main className="flex-1 overflow-hidden relative">
         {renderCurrentView()}
-        {currentView === 'map' && <MovementControls onMove={handleOnScreenMove} />}
+        {currentView === 'map' && <VirtualJoystick onMove={handleOnScreenMove} />}
       </main>
       <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
       {isLoading && <LoadingOverlay />}
       {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />}
       {isNewListingModalOpen && <NewListingModal onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}
       <CloverChatButton onClick={() => setIsCloverChatOpen(true)} />
+      <LiveAssistButton onClick={() => setIsLiveAssistOpen(true)} />
       {isCloverChatOpen && <CloverChat user={user} onClose={() => setIsCloverChatOpen(false)} />}
+      {isLiveAssistOpen && <LiveAssistModal user={user} screenContext={generateScreenContext()} onClose={() => setIsLiveAssistOpen(false)} />}
     </div>
   );
 };

@@ -107,6 +107,34 @@ export async function getGeneralChatResponse(message: string, traits: User['clov
     return response.text;
 }
 
+export async function getLiveAssistResponse(userQuery: string, screenContext: string, user: User | null): Promise<string> {
+    const ai = getGeminiClient();
+    
+    // Add user traits to the context for persona adaptation
+    const userContext = user?.cloverTraits 
+        ? `The user's profile traits are: Friendliness: ${user.cloverTraits.friendliness}/10, Curiosity: ${user.cloverTraits.curiosity}/10.`
+        : "This is a new user.";
+
+    const fullPrompt = `
+        ${userContext}
+        The user is speaking to you. Their transcribed message is: "${userQuery}"
+
+        [SCREEN_CONTEXT: ${screenContext}]
+    `;
+
+    // A one-off call is simpler here than managing multiple chat sessions.
+    // The main system prompt contains all instructions for Clover's persona and modes.
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: fullPrompt,
+        config: {
+            systemInstruction: INITIAL_SYSTEM_PROMPT
+        }
+    });
+
+    return response.text;
+}
+
 export async function generateMapMarker(mapContext: string): Promise<{ name: string; description: string; }> {
     const ai = getGeminiClient();
     const prompt = `You are a creative geologist for the game "RockHound GO". Based on the following context, invent a plausible and interesting fictional point of interest for a player to discover on their map.
