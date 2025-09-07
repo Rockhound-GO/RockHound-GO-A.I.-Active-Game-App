@@ -37,6 +37,37 @@
       }
     }
 
+    /* New Animations for Splash Screen Logo */
+    @keyframes drop-in {
+      from {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @keyframes fade-grow-in {
+      from {
+        opacity: 0;
+        transform-origin: center;
+        transform: scale(0.5);
+      }
+      to {
+        opacity: 1;
+        transform-origin: center;
+        transform: scale(1);
+      }
+    }
+    .animate-drop-in {
+        animation: drop-in 0.6s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+    }
+    .animate-fade-grow-in {
+        animation: fade-grow-in 0.5s cubic-bezier(0.250, 0.460, 0.450, 0.940) 0.4s both;
+    }
+
+
     .sun-effect-container {
       position: absolute;
       inset: 0;

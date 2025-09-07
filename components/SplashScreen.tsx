@@ -9,7 +9,11 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ progress }) => {
   return (
     <div className="flex flex-col h-screen items-center justify-center bg-gray-900 text-gray-200 animate-fade-in">
         <div className="flex items-center mb-4">
-             <AppLogoIcon className="w-12 h-12 mr-4 text-amber-400 animate-pulse" />
+             <AppLogoIcon 
+                className="w-12 h-12 mr-4 text-amber-400"
+                pinClassName="animate-drop-in"
+                crystalClassName="animate-fade-grow-in"
+             />
             <h1 className="text-5xl font-bold tracking-wider text-white">
             ROCKHOUND GO
             </h1>

@@ -1,6 +1,6 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, Part, Type } from '@google/genai';
 import { INITIAL_SYSTEM_PROMPT } from '../constants';
-import { LandListing, User, JournalEntry, Rarity, InvestigationFind } from '../types';
+import { LandListing, User, JournalEntry, Rarity, InvestigationFind, Specimen } from '../types';
 
 // A extensible in-memory store for different AI clients, extensible for future use customizing its characteristics unique to each user'
 const clients: { [key: string]: GoogleGenAI } = {};
@@ -181,6 +181,48 @@ export async function generateMapMarker(mapContext: string): Promise<{ name: str
         };
     }
 }
+
+export async function generateSpecimenDetails(specimenName: string): Promise<Omit<Specimen, 'name'>> {
+    const ai = getGeminiClient();
+    const prompt = `You are a world-class geologist and content creator for the "RockHound GO" app. A user wants to learn more about a specimen they've found called "${specimenName}". Provide a detailed, accurate, and engaging summary for our in-game encyclopedia. Be creative if the name is fictional.`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    formula: { type: Type.STRING, description: "The chemical formula (e.g., 'SiO₂'). Use 'N/A' if not applicable." },
+                    hardness: { type: Type.STRING, description: "The Mohs hardness (e.g., '7', '6.5-7')." },
+                    luster: { type: Type.STRING, description: "The luster (e.g., 'Vitreous', 'Metallic')." },
+                    crystalSystem: { type: Type.STRING, description: "The crystal system (e.g., 'Trigonal', 'Isometric')." },
+                    description: { type: Type.STRING, description: "A rich, one-paragraph description covering its key features, formation, and significance." },
+                    funFact: { type: Type.STRING, description: "A surprising or fascinating fact about the specimen." },
+                },
+                required: ["formula", "hardness", "luster", "crystalSystem", "description", "funFact"]
+            },
+        }
+    });
+
+    try {
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+    } catch (e) {
+        console.error("Failed to parse AI response for specimen details:", e);
+        // Fallback in case of parsing error
+        return {
+            formula: '???',
+            hardness: '???',
+            luster: '???',
+            crystalSystem: '???',
+            description: `Clover's geological database doesn't have an entry for this yet. It seems you've found something truly unique! Your field notes are the only data available.`,
+            funFact: 'The fact that this specimen exists is a fun fact in itself!',
+        };
+    }
+}
+
 
 export async function generateListingDescription(listing: LandListing): Promise<string> {
     const ai = getGeminiClient();

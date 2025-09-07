@@ -44,6 +44,7 @@ export interface Specimen {
     luster: string;
     crystalSystem: string;
     description: string;
+    funFact?: string;
 }
 
 export interface Achievement {
