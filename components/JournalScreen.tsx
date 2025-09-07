@@ -42,21 +42,28 @@ const CompassIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 const JournalScreen: React.FC<JournalScreenProps> = ({ entries, onNavigate }) => {
     const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
-    const [activeTab, setActiveTab] = useState('Discovered Places');
+    const [activeTab, setActiveTab] = useState('Collection');
 
-    const renderEmptyState = () => (
+    const renderEmptyState = (isFavorites: boolean) => (
         <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-gray-800/50 animate-fade-in">
             <CompassIcon className="h-24 w-24 mx-auto text-amber-400/50" />
-            <h2 className="mt-4 text-2xl font-bold text-gray-100">Start exploring</h2>
+            <h2 className="mt-4 text-2xl font-bold text-gray-100">
+                 {isFavorites ? 'No Favorites Yet' : 'Start Your Collection'}
+            </h2>
             <p className="mt-2 text-gray-400 max-w-md mx-auto">
-                Add your first discovered place to your journal!
+                {isFavorites
+                    ? "You haven't marked any specimens as favorites."
+                    : "Your journal is empty. Use the Identify screen to find and log your first specimen!"
+                }
             </p>
-            <button
-                onClick={onNavigate}
-                className="mt-8 bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:from-amber-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
-            >
-                Let's go!
-            </button>
+            {!isFavorites && (
+                 <button
+                    onClick={onNavigate}
+                    className="mt-8 bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:from-amber-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
+                >
+                    Identify a Specimen
+                </button>
+            )}
         </div>
     );
 
@@ -92,19 +99,29 @@ const JournalScreen: React.FC<JournalScreenProps> = ({ entries, onNavigate }) =>
         </div>
     );
 
+    const renderContent = () => {
+        if (activeTab === 'Collection') {
+            return entries.length === 0 ? renderEmptyState(false) : renderPopulatedState();
+        }
+        if (activeTab === 'Favorites') {
+            // For now, since there is no favorite functionality, we show an empty state.
+            return renderEmptyState(true);
+        }
+        return null;
+    };
 
     return (
         <>
             <div className="h-full flex flex-col bg-gray-800/50 animate-fade-in">
                 {/* --- Tab Navigation --- */}
                 <div className="flex border-b border-gray-700 shrink-0">
-                     <button onClick={() => setActiveTab('Discovered Places')} className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'Discovered Places' ? 'text-amber-400 border-b-2 border-amber-400 bg-gray-900/30' : 'text-gray-400'}`}>Discovered Places</button>
-                     <button onClick={() => setActiveTab('Favourite')} className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'Favourite' ? 'text-amber-400 border-b-2 border-amber-400 bg-gray-900/30' : 'text-gray-400'}`}>Favourite</button>
+                     <button onClick={() => setActiveTab('Collection')} className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'Collection' ? 'text-amber-400 border-b-2 border-amber-400 bg-gray-900/30' : 'text-gray-400'}`}>Collection</button>
+                     <button onClick={() => setActiveTab('Favorites')} className={`flex-1 py-3 text-sm font-medium transition ${activeTab === 'Favorites' ? 'text-amber-400 border-b-2 border-amber-400 bg-gray-900/30' : 'text-gray-400'}`}>Favorites</button>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4">
-                    <div className="container mx-auto max-w-6xl">
-                         {entries.length === 0 ? renderEmptyState() : renderPopulatedState()}
+                    <div className="container mx-auto max-w-6xl h-full">
+                         {renderContent()}
                     </div>
                 </div>
             </div>

@@ -27,6 +27,58 @@
         transform: translateY(100vh);
       }
     }
+
+    @keyframes sun-ray-rotate {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .sun-effect-container {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 25; /* Ensure it's on top of map but below UI */
+    }
+
+    /* This ::before will be the sun rays */
+    .sun-effect-container::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: conic-gradient(
+        from 0deg at 50% 50%,
+        transparent 0deg,
+        rgba(255, 249, 219, 0.2) 1deg,
+        transparent 5deg,
+        transparent 19deg,
+        rgba(255, 249, 219, 0.15) 20deg,
+        transparent 24deg,
+        transparent 43deg,
+        rgba(255, 249, 219, 0.2) 45deg,
+        transparent 49deg,
+        transparent 65deg,
+        rgba(255, 249, 219, 0.1) 67deg,
+        transparent 70deg,
+        transparent 360deg
+      );
+      animation: sun-ray-rotate 180s linear infinite;
+    }
+
+    /* This ::after can be the general glow */
+    .sun-effect-container::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 5% 5%, rgba(255, 249, 219, 0.2) 0%, transparent 40%);
+    }
   </style>
 </head>
   <body class="bg-gray-900">

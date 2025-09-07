@@ -220,3 +220,21 @@ Input: {
 
     return response.text;
 }
+
+export async function investigateLocation(name: string, description: string): Promise<string> {
+    const ai = getGeminiClient();
+    const prompt = `You are a creative storyteller for the rockhounding game "RockHound GO". A player has chosen to investigate a point of interest they discovered. Write a short, exciting, one-paragraph story (3-5 sentences) about what they found there.
+
+    Location Name: "${name}"
+    Location Description: "${description}"
+
+    The story should be engaging and make the player feel like they made a cool discovery. It could be a rare mineral, a fossil, a hidden cave, or an interesting historical artifact related to geology.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+    });
+
+    return response.text;
+}

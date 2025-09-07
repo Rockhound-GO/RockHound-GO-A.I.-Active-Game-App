@@ -3,6 +3,7 @@
   "description": "The ultimate real-world rockhounding adventure. Identify, collect, and learn about geological specimens with the power of AI.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

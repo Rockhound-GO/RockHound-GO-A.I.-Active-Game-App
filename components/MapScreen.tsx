@@ -6,10 +6,13 @@ import MapThemeModal from './MapThemeModal';
 import MapLayersPanel from './MapLayersPanel';
 import Player from './Player';
 import WeatherWidget from './WeatherWidget';
-import { CrystalClusterIcon, QuarryIcon, MineIcon, POIIcon, UserPOIIcon, ScoutIcon } from './MapIcons';
-import { generateMapMarker } from '../services/geminiService';
+import { CrystalClusterIcon, POIIcon, UserPOIIcon, ScoutIcon } from './MapIcons';
+import { generateMapMarker, investigateLocation } from '../services/geminiService';
 import { getWeatherForLocation } from '../services/weatherService';
 import WeatherEffects from './WeatherEffects';
+import UserPoiActionModal from './UserPoiActionModal';
+import InvestigationResultModal from './InvestigationResultModal';
+
 
 interface MapScreenProps {
     onChallengeRequest: () => void;
@@ -59,7 +62,10 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
             [MapFeatureType.USER_POI]: true,
         };
     });
-    const [hoveredFeature, setHoveredFeature] = useState<MapFeature | null>(null);
+    const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+    const [actionPoi, setActionPoi] = useState<MapFeature | null>(null);
+    const [investigationResult, setInvestigationResult] = useState<string | null>(null);
+    const [isInvestigating, setIsInvestigating] = useState(false);
     const [isScouting, setIsScouting] = useState(false);
     const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
     const [isWeatherLoading, setIsWeatherLoading] = useState(true);
@@ -97,6 +103,37 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
 
     const toggleLayer = (layer: MapFeatureType) => {
         setActiveLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
+    };
+    
+    const handleFeatureClick = (feature: MapFeature) => {
+        if (feature.type === MapFeatureType.USER_POI) {
+            setActionPoi(feature);
+            setSelectedFeature(null);
+        } else {
+            setSelectedFeature(feature);
+            setActionPoi(null);
+        }
+    };
+    
+    const handleRemovePoi = (poiId: string) => {
+        setUserMarkers(prev => prev.filter(marker => marker.id !== poiId));
+        setActionPoi(null);
+    };
+
+    const handleInvestigatePoi = async (poi: MapFeature) => {
+        setActionPoi(null);
+        setIsInvestigating(true);
+        try {
+            const result = await investigateLocation(poi.name, poi.description || '');
+            setInvestigationResult(result);
+            // Remove the POI after it has been investigated
+            setUserMarkers(prev => prev.filter(marker => marker.id !== poi.id));
+        } catch (error) {
+            console.error("Failed to investigate POI:", error);
+            setInvestigationResult("The investigation failed due to a connection error. Please try again later.");
+        } finally {
+            setIsInvestigating(false);
+        }
     };
 
     const handleAiScout = async () => {
@@ -144,8 +181,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
             transform: 'translate(-50%, -50%)',
         };
 
-        const onMouseEnter = () => setHoveredFeature(feature);
-        const onMouseLeave = () => setHoveredFeature(null);
+        const onClick = () => handleFeatureClick(feature);
 
         switch (feature.type) {
             case MapFeatureType.FORMATION:
@@ -154,8 +190,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                 return (
                     <div
                         key={feature.id}
-                        onMouseEnter={onMouseEnter}
-                        onMouseLeave={onMouseLeave}
+                        onClick={onClick}
                         style={{
                             ...featureStyle,
                             width: `${width}px`,
@@ -174,8 +209,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                      <div 
                         key={feature.id} 
                         style={{...featureStyle, pointerEvents: 'all'}} 
-                        onMouseEnter={onMouseEnter}
-                        onMouseLeave={onMouseLeave}
+                        onClick={onClick}
                         className="p-2"
                     >
                        <CrystalClusterIcon className={`w-10 h-10 text-amber-300 drop-shadow-lg`} />
@@ -187,8 +221,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                     <div 
                         key={feature.id} 
                         style={{...featureStyle, pointerEvents: 'all'}} 
-                        onMouseEnter={onMouseEnter}
-                        onMouseLeave={onMouseLeave}
+                        onClick={onClick}
                         className="p-2"
                     >
                        <Icon className={`w-10 h-10 text-sky-300 drop-shadow-lg`} />
@@ -199,8 +232,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                     <div
                         key={feature.id}
                         style={{ ...featureStyle, pointerEvents: 'all' }}
-                        onMouseEnter={onMouseEnter}
-                        onMouseLeave={onMouseLeave}
+                        onClick={onClick}
                         className="p-2"
                     >
                         <UserPOIIcon className={`w-10 h-10 text-green-400 drop-shadow-lg animate-pulse`} />
@@ -222,6 +254,11 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                 ref={viewportRef}
                 className="w-full h-full relative overflow-hidden"
                 style={{ backgroundColor: activeTheme.colors.background }}
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        setSelectedFeature(null);
+                    }
+                }}
             >
                  <WeatherEffects weather={weatherData?.current.icon} />
                 <div
@@ -254,21 +291,27 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
 
                 </div>
 
-                 {hoveredFeature && (
+                 {selectedFeature && (
                     <div 
                         className="absolute z-20 bg-gray-900/80 text-white px-3 py-2 rounded-md shadow-lg pointer-events-none transition-opacity max-w-xs backdrop-blur-sm"
                         style={{
-                            top: `${cameraY + (parseFloat(hoveredFeature.position.top) / 100) * mapHeight - 40}px`,
-                            left: `${cameraX + (parseFloat(hoveredFeature.position.left) / 100) * mapWidth}px`,
+                            top: `${cameraY + (parseFloat(selectedFeature.position.top) / 100) * mapHeight - 40}px`,
+                            left: `${cameraX + (parseFloat(selectedFeature.position.left) / 100) * mapWidth}px`,
                             transform: 'translateX(-50%)',
                         }}
                     >
-                        <p className="font-bold text-base">{hoveredFeature.name}</p>
-                        {hoveredFeature.description && (
-                            <p className="text-gray-300 mt-1 text-sm">{hoveredFeature.description}</p>
+                        <p className="font-bold text-base">{selectedFeature.name}</p>
+                        {selectedFeature.description && (
+                            <p className="text-gray-300 mt-1 text-sm">{selectedFeature.description}</p>
                         )}
                     </div>
                 )}
+                 {isInvestigating && (
+                    <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm flex flex-col items-center justify-center z-40">
+                        <ScoutIcon className="w-16 h-16 text-amber-400 animate-spin" />
+                        <p className="text-white mt-4">Investigating...</p>
+                    </div>
+                 )}
             </div>
 
             <div className="absolute top-4 right-4 flex flex-col items-end gap-3 z-30">
@@ -306,6 +349,20 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
                 </button>
             </div>
             
+            {actionPoi && (
+                <UserPoiActionModal
+                    poi={actionPoi}
+                    onClose={() => setActionPoi(null)}
+                    onInvestigate={() => handleInvestigatePoi(actionPoi)}
+                    onRemove={() => handleRemovePoi(actionPoi.id)}
+                />
+            )}
+            {investigationResult && (
+                <InvestigationResultModal
+                    resultText={investigationResult}
+                    onClose={() => setInvestigationResult(null)}
+                />
+            )}
             {isThemeModalOpen && <MapThemeModal
                 currentThemeId={activeThemeId}
                 onClose={() => setIsThemeModalOpen(false)}

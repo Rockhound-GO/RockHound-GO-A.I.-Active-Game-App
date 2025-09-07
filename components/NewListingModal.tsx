@@ -88,7 +88,7 @@ const NewListingModal: React.FC<NewListingModalProps> = ({ onClose, onCreateList
                 <div className="p-6 border-b border-gray-700">
                     <h2 className="text-xl font-bold text-white text-center">Create New Land Listing</h2>
                 </div>
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+                <form id="new-listing-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
                     <div className="space-y-4">
                         <InputField id="propertyName" label="Property Name" value={formData.propertyName} onChange={handleInputChange} />
                         <InputField id="landOwnerName" label="Your Name" value={formData.landOwnerName} onChange={handleInputChange} />
@@ -130,12 +130,7 @@ const NewListingModal: React.FC<NewListingModalProps> = ({ onClose, onCreateList
                     </button>
                     <button 
                         type="submit"
-                        onClick={(e) => {
-                            const form = e.currentTarget.closest('div')?.previousElementSibling as HTMLFormElement;
-                            if(form) {
-                                handleSubmit(e);
-                            }
-                        }}
+                        form="new-listing-form"
                         className="bg-amber-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-amber-500 transition-colors"
                     >
                         Create Listing

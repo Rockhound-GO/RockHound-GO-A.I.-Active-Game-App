@@ -56,25 +56,21 @@ const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 // A robust utility to get a user-friendly error message from a geolocation error.
-const getGeolocationErrorMessage = (error: any): string => {
-    console.error("Geolocation Error Object:", error);
+const getGeolocationErrorMessage = (error: GeolocationPositionError): string => {
+    // Log a clear, string-based error to the console to avoid "[object Object]".
+    console.error(`Geolocation Error (Code: ${error.code}): ${error.message}`);
 
-    if (error && typeof error.code === 'number') {
-        switch (error.code) {
-            case 1: // PERMISSION_DENIED
-                return "Location access denied. Please enable location permissions in your browser settings to use map features.";
-            case 2: // POSITION_UNAVAILABLE
-                return "Your location is currently unavailable. Please check your network connection or move to an area with a better GPS signal.";
-            case 3: // TIMEOUT
-                return "Getting your location took too long. Please try again.";
-            default:
-                return `An unknown location error occurred. Code: ${error.code}`;
-        }
+    switch (error.code) {
+        case 1: // PERMISSION_DENIED
+            return "Location access denied. Please enable location permissions in your browser settings to use map features.";
+        case 2: // POSITION_UNAVAILABLE
+            return "Your location is currently unavailable. Please check your network connection or move to an area with a better GPS signal.";
+        case 3: // TIMEOUT
+            return "Getting your location took too long. Please try again.";
+        default:
+            // The message property is often informative enough.
+            return `An unknown location error occurred: ${error.message}`;
     }
-    if (error && typeof error.message === 'string' && error.message.length > 0) {
-        return error.message;
-    }
-    return "An unexpected issue occurred while accessing your location. Please ensure location services are enabled and try again.";
 };
 
 
@@ -221,7 +217,7 @@ const App: React.FC = () => {
             const { latitude, longitude } = position.coords;
             setCurrentLocation({ latitude, longitude });
         },
-        (error: any) => {
+        (error: GeolocationPositionError) => {
             setError(getGeolocationErrorMessage(error));
         },
         { 

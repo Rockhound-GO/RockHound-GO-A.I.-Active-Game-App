@@ -28,13 +28,7 @@ const RainEffect: React.FC = () => {
 };
 
 const SunnyEffect: React.FC = () => (
-    <div 
-        className="absolute inset-0 pointer-events-none"
-        style={{
-            zIndex: 25,
-            background: 'radial-gradient(circle at 5% 5%, rgba(255, 255, 224, 0.2) 0%, rgba(255, 255, 224, 0) 35%)'
-        }}
-    ></div>
+    <div className="sun-effect-container"></div>
 );
 
 const CloudyEffect: React.FC = () => (
