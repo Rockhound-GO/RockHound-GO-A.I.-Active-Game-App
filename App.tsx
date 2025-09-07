@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User, MapFeature } from './types';
+import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User, MapFeature, InvestigationFind } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
 import { ALL_ACHIEVEMENTS } from './achievements';
 import Header from './components/Header';
@@ -23,7 +23,7 @@ import VirtualJoystick from './components/VirtualJoystick';
 import { LISTINGS_DATA } from './listingsData';
 import CloverChat from './components/CloverChat';
 import CloverChatButton from './components/CloverChatButton';
-import { INITIAL_SYSTEM_PROMPT } from './constants';
+import { INITIAL_SYSTEM_PROMPT, MYSTERY_SPECIMEN_IMAGE_URL } from './constants';
 import LiveAssistButton from './components/LiveAssistButton';
 import LiveAssistModal from './components/LiveAssistModal';
 
@@ -55,11 +55,8 @@ const fileToDataUrl = (file: File): Promise<string> => {
     });
 };
 
-// A robust utility to get a user-friendly error message from a geolocation error.
+// A utility to get a user-friendly error message from a geolocation error.
 const getGeolocationErrorMessage = (error: GeolocationPositionError): string => {
-    // Log a clear, string-based error to the console to avoid "[object Object]".
-    console.error(`Geolocation Error (Code: ${error.code}): ${error.message}`);
-
     switch (error.code) {
         case 1: // PERMISSION_DENIED
             return "Location access denied. Please enable location permissions in your browser settings to use map features.";
@@ -68,7 +65,6 @@ const getGeolocationErrorMessage = (error: GeolocationPositionError): string => 
         case 3: // TIMEOUT
             return "Getting your location took too long. Please try again.";
         default:
-            // The message property is often informative enough.
             return `An unknown location error occurred: ${error.message}`;
     }
 };
@@ -96,7 +92,10 @@ const App: React.FC = () => {
   const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
   const [isLiveAssistOpen, setIsLiveAssistOpen] = useState(false);
   const [userMarkers, setUserMarkers] = useState<MapFeature[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const keysPressed = useRef(new Set<string>());
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // FIX: Initialize useRef with null to address the "Expected 1 arguments, but got 0" error. This is safer for refs that will hold DOM request IDs.
   const animationFrameId = useRef<number | null>(null);
 
@@ -218,6 +217,9 @@ const App: React.FC = () => {
             setCurrentLocation({ latitude, longitude });
         },
         (error: GeolocationPositionError) => {
+            // Detailed log for developers to prevent '[object Object]' and aid debugging.
+            console.error("Geolocation Error:", { code: error.code, message: error.message });
+            // Set a user-friendly message for the UI.
             setError(getGeolocationErrorMessage(error));
         },
         { 
@@ -284,15 +286,52 @@ const App: React.FC = () => {
     }
   }, [journalEntries, collectionScore, unlockedAchievements]);
 
-  const handleSendMessage = async (messageText: string, imageFiles?: File[]) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setImageFiles(files);
+      
+      imagePreviews.forEach(URL.revokeObjectURL);
+      const newPreviewUrls = files.map(file => URL.createObjectURL(file));
+      setImagePreviews(newPreviewUrls);
+    }
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    URL.revokeObjectURL(imagePreviews[indexToRemove]);
+
+    const newImageFiles = imageFiles.filter((_, index) => index !== indexToRemove);
+    const newImagePreviews = imagePreviews.filter((_, index) => index !== indexToRemove);
+    
+    setImageFiles(newImageFiles);
+    setImagePreviews(newImagePreviews);
+
+    if (newImageFiles.length === 0 && fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  useEffect(() => {
+    // Cleanup object URLs on unmount
+    return () => {
+      imagePreviews.forEach(URL.revokeObjectURL);
+    };
+  }, [imagePreviews]);
+
+  const triggerFileInput = () => {
+    setCurrentView('identify');
+    fileInputRef.current?.click();
+  };
+
+  const handleSendMessage = async (messageText: string) => {
     if (!chatSession || isLoading) return;
-    if (!messageText && (!imageFiles || imageFiles.length === 0)) return;
+    if (!messageText && imageFiles.length === 0) return;
 
     setIsLoading(true);
     setError(null);
     
-    const persistentImageUrls = imageFiles && imageFiles.length > 0
-        ? await Promise.all(imageFiles.map(fileToDataUrl))
+    const persistentImageUrls = imagePreviews.length > 0
+        ? imagePreviews
         : undefined;
         
     const newUserMessage: GameMessage = { author: MessageAuthor.USER, text: messageText, imageUrls: persistentImageUrls };
@@ -314,7 +353,7 @@ const App: React.FC = () => {
         const locationContext = `My current location is Latitude: ${latitude}, Longitude: ${longitude}. My current score is ${collectionScore}. ${userTraitsContext}`;
         const fullPrompt = `${messageText}\n\n${locationContext}`;
         
-        const imageParts = imageFiles && imageFiles.length > 0
+        const imageParts = imageFiles.length > 0
             ? await Promise.all(imageFiles.map(fileToGenerativePart))
             : undefined;
             
@@ -358,6 +397,14 @@ const App: React.FC = () => {
         setGameMessages(prev => prev.slice(0, -2));
     } finally {
         setIsLoading(false);
+        setImageFiles([]);
+        setImagePreviews(prev => {
+            prev.forEach(URL.revokeObjectURL);
+            return [];
+        });
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
     }
   };
   
@@ -433,6 +480,17 @@ const App: React.FC = () => {
     setCollectionScore(prev => prev - userGave.score + userReceived.score);
   };
 
+  const handleFindSpecimen = (specimenData: InvestigationFind) => {
+    const newEntry: JournalEntry = {
+        ...specimenData,
+        id: new Date().toISOString() + Math.random(),
+        date: new Date().toISOString(),
+        imageUrl: MYSTERY_SPECIMEN_IMAGE_URL,
+    };
+    setJournalEntries(prev => [newEntry, ...prev]);
+    setCollectionScore(prev => prev + newEntry.score);
+  };
+
 
   const dismissAchievementNotification = (id: string) => {
     setAchievementNotifications(prev => prev.filter(ach => ach.id !== id));
@@ -468,6 +526,7 @@ const App: React.FC = () => {
                   currentLocation={currentLocation}
                   userMarkers={userMarkers}
                   setUserMarkers={setUserMarkers}
+                  onFindSpecimen={handleFindSpecimen}
                 />;
       case 'journal':
         return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;
@@ -496,7 +555,15 @@ const App: React.FC = () => {
                 />;
       case 'identify':
       default:
-        return <IdentifyView gameMessages={gameMessages} isLoading={isLoading} onSendMessage={handleSendMessage} error={error} />;
+        return <IdentifyView 
+                    gameMessages={gameMessages} 
+                    isLoading={isLoading} 
+                    onSendMessage={handleSendMessage} 
+                    error={error} 
+                    imagePreviews={imagePreviews}
+                    removeImage={removeImage}
+                    triggerFileInput={() => fileInputRef.current?.click()}
+                />;
     }
   };
   
@@ -510,6 +577,15 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-sans">
+       <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageChange}
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+      />
       <div className="fixed top-4 inset-x-4 sm:left-auto sm:right-4 z-50 space-y-2 w-auto max-w-sm">
         {achievementNotifications.map(ach => (
             <AchievementToast key={ach.id} achievement={ach} onDismiss={() => dismissAchievementNotification(ach.id)} />
@@ -523,7 +599,7 @@ const App: React.FC = () => {
         {renderCurrentView()}
         {currentView === 'map' && <VirtualJoystick onMove={handleOnScreenMove} />}
       </main>
-      <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
+      <BottomNav currentView={currentView} setCurrentView={setCurrentView} onIdentifyClick={triggerFileInput} />
       {isLoading && <LoadingOverlay />}
       {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />}
       {isNewListingModalOpen && <NewListingModal onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}

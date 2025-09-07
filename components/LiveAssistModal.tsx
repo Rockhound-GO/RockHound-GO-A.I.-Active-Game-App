@@ -77,11 +77,15 @@ const LiveAssistModal: React.FC<LiveAssistModalProps> = ({ user, screenContext, 
         synthesis.cancel(); // Cancel any previous speech
         const utterance = new SpeechSynthesisUtterance(text);
 
-        // Select a more natural, female voice for Clover
-        const femaleUSVoice = voices.find(v => v.lang === 'en-US' && /female|fiona|samantha|zira/i.test(v.name)) || voices.find(v => v.lang === 'en-US' && v.name.includes('Female'));
+        // Select a more natural, female voice for Clover, prioritizing known high-quality ones
+        const femaleUSVoice = voices.find(v => v.lang === 'en-US' && /google|female|fiona|samantha|zira/i.test(v.name)) || voices.find(v => v.lang === 'en-US');
         if (femaleUSVoice) {
             utterance.voice = femaleUSVoice;
         }
+
+        // Adjust pitch and rate for a smoother, more natural voice
+        utterance.pitch = 1.1; // A slightly higher pitch can sound more friendly and clear.
+        utterance.rate = 1.05; // Speaking slightly faster than default for a more responsive feel.
 
         utterance.onstart = () => {
             setIsSpeaking(true);

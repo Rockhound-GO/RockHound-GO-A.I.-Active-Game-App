@@ -29,9 +29,10 @@ const ProfileIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6
 interface BottomNavProps {
     currentView: string;
     setCurrentView: (view: string) => void;
+    onIdentifyClick: () => void;
 }
 
-const BottomNav: React.FC<BottomNavProps> = ({ currentView, setCurrentView }) => {
+const BottomNav: React.FC<BottomNavProps> = ({ currentView, setCurrentView, onIdentifyClick }) => {
     return (
         <nav className="bg-gray-800/80 backdrop-blur-sm border-t border-gray-700 relative">
             <div className="container mx-auto max-w-4xl flex justify-around items-center h-16">
@@ -41,7 +42,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentView, setCurrentView }) =>
                 {/* Central Identify Button */}
                 <div className="w-20 h-20">
                     <button 
-                        onClick={() => setCurrentView('identify')}
+                        onClick={onIdentifyClick}
                         className={`absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border-4 border-gray-800 flex items-center justify-center transition-all duration-300 transform hover:scale-110 ${currentView === 'identify' ? 'bg-amber-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-amber-600'}`}
                         aria-label="Identify Specimen"
                     >

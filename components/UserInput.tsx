@@ -1,8 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface UserInputProps {
-  onSendMessage: (message: string, imageFiles?: File[]) => void;
+  onSendMessage: (message: string) => void;
   isLoading: boolean;
+  imagePreviews: string[];
+  removeImage: (index: number) => void;
+  onCameraClick: () => void;
 }
 
 const SendIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -30,48 +33,8 @@ const CameraIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 
-const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
+const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading, imagePreviews, removeImage, onCameraClick }) => {
   const [inputValue, setInputValue] = useState('');
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    // Cleanup object URLs on unmount
-    return () => {
-      imagePreviews.forEach(URL.revokeObjectURL);
-    };
-  }, [imagePreviews]);
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      setImageFiles(files);
-      
-      imagePreviews.forEach(URL.revokeObjectURL);
-      const newPreviewUrls = files.map(file => URL.createObjectURL(file));
-      setImagePreviews(newPreviewUrls);
-    }
-  };
-
-  const handleCamerClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const removeImage = (indexToRemove: number) => {
-    URL.revokeObjectURL(imagePreviews[indexToRemove]);
-
-    const newImageFiles = imageFiles.filter((_, index) => index !== indexToRemove);
-    const newImagePreviews = imagePreviews.filter((_, index) => index !== indexToRemove);
-    
-    setImageFiles(newImageFiles);
-    setImagePreviews(newImagePreviews);
-
-    // If all images are removed, clear the file input
-    if (newImageFiles.length === 0 && fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,38 +42,23 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
     
     const trimmedInput = inputValue.trim();
 
-    if (imageFiles.length === 0 && !trimmedInput) {
+    if (imagePreviews.length === 0 && !trimmedInput) {
         return; // Can't submit empty
     }
 
     const contextText = trimmedInput || "Please identify this specimen.";
-    onSendMessage(contextText, imageFiles);
+    onSendMessage(contextText);
     
     setInputValue('');
-    setImageFiles([]);
-    imagePreviews.forEach(URL.revokeObjectURL);
-    setImagePreviews([]);
-    if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
   };
 
   return (
     <footer className="bg-gray-800/50 p-4 border-t border-gray-700">
       <div className="container mx-auto max-w-4xl">
         <form onSubmit={handleSubmit} className="flex items-start space-x-4">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageChange}
-            accept="image/*"
-            capture="environment"
-            multiple // Allow multiple files
-            className="hidden"
-          />
           <button
             type="button"
-            onClick={handleCamerClick}
+            onClick={onCameraClick}
             disabled={isLoading}
             className="bg-gray-700 text-gray-300 font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
           >
@@ -146,7 +94,7 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading }) => {
           </div>
           <button
             type="submit"
-            disabled={isLoading || (imageFiles.length === 0 && !inputValue.trim())}
+            disabled={isLoading || (imagePreviews.length === 0 && !inputValue.trim())}
             className="bg-gradient-to-br from-amber-500 to-orange-600 text-white font-bold p-3 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:from-amber-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-amber-400"
           >
            <SendIcon className="w-6 h-6" />

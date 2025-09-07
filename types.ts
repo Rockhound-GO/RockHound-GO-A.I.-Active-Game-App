@@ -136,3 +136,16 @@ export interface WeatherData {
     current: CurrentWeather;
     forecast: ForecastDay[];
 }
+
+// --- New Investigation Types ---
+export interface InvestigationFind {
+    name: string;
+    description: string;
+    rarity: Rarity;
+    score: number;
+}
+
+export interface InvestigationResult {
+    story: string;
+    specimen: InvestigationFind | null;
+}

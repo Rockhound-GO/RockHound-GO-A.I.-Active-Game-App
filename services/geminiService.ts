@@ -1,6 +1,6 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, Part, Type } from '@google/genai';
 import { INITIAL_SYSTEM_PROMPT } from '../constants';
-import { LandListing, User, JournalEntry } from '../types';
+import { LandListing, User, JournalEntry, Rarity, InvestigationFind } from '../types';
 
 // A extensible in-memory store for different AI clients, extensible for future use customizing its characteristics unique to each user'
 const clients: { [key: string]: GoogleGenAI } = {};
@@ -221,20 +221,67 @@ Input: {
     return response.text;
 }
 
-export async function investigateLocation(name: string, description: string): Promise<string> {
+export async function investigateLocationAndFindSpecimen(name: string, description: string): Promise<{ story: string; specimen: InvestigationFind | null; }> {
     const ai = getGeminiClient();
-    const prompt = `You are a creative storyteller for the rockhounding game "RockHound GO". A player has chosen to investigate a point of interest they discovered. Write a short, exciting, one-paragraph story (3-5 sentences) about what they found there.
-
+    const prompt = `You are a game master for the rockhounding game "RockHound GO". A player is investigating a point of interest.
+    
     Location Name: "${name}"
     Location Description: "${description}"
 
-    The story should be engaging and make the player feel like they made a cool discovery. It could be a rare mineral, a fossil, a hidden cave, or an interesting historical artifact related to geology.
+    Your tasks:
+    1.  Write a short, exciting, one-paragraph story (3-5 sentences) about what they found. The story should be engaging and make the player feel like they made a cool discovery.
+    2.  Decide if they found a geological specimen. There is a 50% chance they find something. If they don't, the specimen field should be null.
+    3.  If they find a specimen, provide its details. Be creative! It could be a common rock with unusual properties, a rare crystal, or even a small fossil. The score should reflect the rarity.
+
+    Rarity-Score guide:
+    - Common: 5-15 points
+    - Uncommon: 16-40 points
+    - Rare: 41-100 points
+    - Epic: 101-250 points
+    - Legendary: 251+ points
     `;
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    story: {
+                        type: Type.STRING,
+                        description: "The engaging story of the player's discovery."
+                    },
+                    specimen: {
+                        type: Type.OBJECT,
+                        nullable: true,
+                        properties: {
+                            name: { type: Type.STRING },
+                            description: { type: Type.STRING, description: "A brief, exciting description of the specimen, from Clover's perspective." },
+                            rarity: { type: Type.STRING, enum: ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] },
+                            score: { type: Type.INTEGER }
+                        }
+                    }
+                },
+                required: ["story", "specimen"]
+            },
+        }
     });
 
-    return response.text;
+    try {
+        const jsonText = response.text.trim();
+        const data = JSON.parse(jsonText);
+        return {
+            story: data.story || "You searched the area, but didn't find anything of note this time. The thrill of the hunt continues!",
+            specimen: data.specimen
+        };
+    } catch (e) {
+        console.error("Failed to parse AI response for investigation:", e);
+        // Fallback in case of parsing error
+        return {
+            story: "You rummage through the rocks and dirt, feeling a sense of anticipation. While you don't find a collectible specimen today, the experience of being out in nature is its own reward.",
+            specimen: null,
+        };
+    }
 }

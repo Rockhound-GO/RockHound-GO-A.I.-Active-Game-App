@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MAP_THEMES } from '../mapThemes';
 import { MAP_FEATURES } from '../mapData';
-import { MapTheme, MapFeature, MapFeatureType, WeatherData } from '../types';
+import { MapTheme, MapFeature, MapFeatureType, WeatherData, InvestigationResult, InvestigationFind } from '../types';
 import MapThemeModal from './MapThemeModal';
 import MapLayersPanel from './MapLayersPanel';
 import Player from './Player';
 import WeatherWidget from './WeatherWidget';
 import { CrystalClusterIcon, POIIcon, UserPOIIcon, ScoutIcon } from './MapIcons';
-import { generateMapMarker, investigateLocation } from '../services/geminiService';
+import { generateMapMarker, investigateLocationAndFindSpecimen } from '../services/geminiService';
 import { getWeatherForLocation } from '../services/weatherService';
 import WeatherEffects from './WeatherEffects';
 import UserPoiActionModal from './UserPoiActionModal';
@@ -23,6 +23,7 @@ interface MapScreenProps {
     currentLocation: { latitude: number; longitude: number; } | null;
     userMarkers: MapFeature[];
     setUserMarkers: React.Dispatch<React.SetStateAction<MapFeature[]>>;
+    onFindSpecimen: (specimen: InvestigationFind) => void;
 }
 
 const PaintBrushIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -40,7 +41,7 @@ const LayersIcon: React.FC<{ className?: string }> = ({ className }) => (
 const THEME_STORAGE_KEY = 'rockhound-go-map-theme';
 const LAYERS_STORAGE_KEY = 'rockhound-go-map-layers';
 
-const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId, currentLocation, userMarkers, setUserMarkers }) => {
+const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPosition, mapWidth, mapHeight, avatarId, currentLocation, userMarkers, setUserMarkers, onFindSpecimen }) => {
     const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
     const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
     const [activeThemeId, setActiveThemeId] = useState<string>(() => {
@@ -64,7 +65,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
     });
     const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
     const [actionPoi, setActionPoi] = useState<MapFeature | null>(null);
-    const [investigationResult, setInvestigationResult] = useState<string | null>(null);
+    const [investigationResult, setInvestigationResult] = useState<InvestigationResult | null>(null);
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [isScouting, setIsScouting] = useState(false);
     const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
@@ -124,13 +125,19 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
         setActionPoi(null);
         setIsInvestigating(true);
         try {
-            const result = await investigateLocation(poi.name, poi.description || '');
+            const result = await investigateLocationAndFindSpecimen(poi.name, poi.description || '');
             setInvestigationResult(result);
+            if (result.specimen) {
+                onFindSpecimen(result.specimen);
+            }
             // Remove the POI after it has been investigated
             setUserMarkers(prev => prev.filter(marker => marker.id !== poi.id));
         } catch (error) {
             console.error("Failed to investigate POI:", error);
-            setInvestigationResult("The investigation failed due to a connection error. Please try again later.");
+            setInvestigationResult({ 
+                story: "The investigation failed due to a connection error. Please try again later.",
+                specimen: null
+            });
         } finally {
             setIsInvestigating(false);
         }
@@ -359,7 +366,7 @@ const MapScreen: React.FC<MapScreenProps> = ({ onChallengeRequest, playerPositio
             )}
             {investigationResult && (
                 <InvestigationResultModal
-                    resultText={investigationResult}
+                    result={investigationResult}
                     onClose={() => setInvestigationResult(null)}
                 />
             )}

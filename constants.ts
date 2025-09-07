@@ -45,6 +45,8 @@ You have a unique relationship with each user. Your personality should subtly ad
 *   Your very first message should be warm and welcoming, clearly instructing the user to use the camera button on the 'Identify' screen to get started.
 `;
 
+export const MYSTERY_SPECIMEN_IMAGE_URL = 'https://images.unsplash.com/photo-1550644223-4b0a234da303?q=80&w=800&auto=format&fit=crop';
+
 export const CLOVER_INVENTORY: JournalEntry[] = [
     {
         id: 'clover-1',
