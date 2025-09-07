@@ -16,6 +16,7 @@ import JournalScreen from './components/JournalScreen';
 import TradeScreen from './components/TradeScreen';
 import SplashScreen from './components/SplashScreen';
 import ProfileScreen from './components/ProfileScreen';
+import PriceHubScreen from './components/PriceHubScreen';
 import AchievementToast from './components/AchievementToast';
 import PurchaseToast from './components/PurchaseToast';
 import WelcomeModal from './components/WelcomeModal';
@@ -498,6 +499,8 @@ const App: React.FC = () => {
                     userAvatar={user!.avatarId} 
                     onUpdateAvatar={handleUpdateAvatar} 
                 />;
+      case 'prices':
+        return <PriceHubScreen />;
       case 'identify':
       default:
         return <IdentifyView gameMessages={gameMessages} isLoading={isLoading} onSendMessage={handleSendMessage} error={error} />;

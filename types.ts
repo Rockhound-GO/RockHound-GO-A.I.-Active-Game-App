@@ -136,3 +136,10 @@ export interface WeatherData {
     current: CurrentWeather;
     forecast: ForecastDay[];
 }
+
+export interface PriceData {
+  name: string;
+  price: number;
+  change: number;
+  category: 'Mineral' | 'Crystal' | 'Rock' | 'Fossil' | 'Gemstone' | 'Metal';
+}
