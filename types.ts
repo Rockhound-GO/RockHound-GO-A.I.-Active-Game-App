@@ -4,10 +4,13 @@ export enum MessageAuthor {
   SYSTEM = 'SYSTEM',
 }
 
+import { JournalEntry } from './types';
+
 export interface GameMessage {
   author: MessageAuthor;
   text: string;
   imageUrls?: string[];
+  identification?: JournalEntry;
 }
 
 export interface LeaderboardEntry {
@@ -35,6 +38,9 @@ export interface JournalEntry {
   date: string;
   imageUrl: string;
   rarity: Rarity;
+  mineralComposition?: string;
+  hardness?: string;
+  geologicalContext?: string;
 }
 
 export interface Specimen {
@@ -68,6 +74,9 @@ export interface MapTheme {
     };
 }
 
+/**
+ * @deprecated Replaced by the user-driven Gemstone Marketplace.
+ */
 export interface LandListing {
   id: string;
   propertyName: string;
@@ -78,6 +87,17 @@ export interface LandListing {
   accessRules: string;
   additionalNotes: string;
   image: string;
+}
+
+export interface MarketplaceListing {
+    listingId: string;
+    seller: {
+        name: string;
+        avatarId: string;
+    };
+    item: JournalEntry;
+    price: number;
+    listedDate: string;
 }
 
 // --- New Map Feature Types ---
@@ -149,4 +169,13 @@ export interface InvestigationFind {
 export interface InvestigationResult {
     story: string;
     specimen: InvestigationFind | null;
+}
+
+export interface RockhoundingSite {
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    minerals: string[];
+    description: string;
 }
