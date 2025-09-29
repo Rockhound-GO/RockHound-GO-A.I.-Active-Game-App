@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Chat } from '@google/genai';
-import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, LandListing, User, MapFeature, InvestigationFind } from './types';
+import { GameMessage, MessageAuthor, StoreItem, JournalEntry, Rarity, Achievement, MarketplaceListing, User } from './types';
 import { createGameSession, sendMessageToAIStream, fileToGenerativePart } from './services/geminiService';
 import { ALL_ACHIEVEMENTS } from './achievements';
 import Header from './components/Header';
@@ -13,17 +13,15 @@ import ListingDetailModal from './components/ListingDetailModal';
 import NewListingModal from './components/NewListingModal';
 import StoreScreen from './components/StoreScreen';
 import JournalScreen from './components/JournalScreen';
-import TradeScreen from './components/TradeScreen';
+import LearningCenter from './components/LearningCenter';
 import SplashScreen from './components/SplashScreen';
 import ProfileScreen from './components/ProfileScreen';
 import AchievementToast from './components/AchievementToast';
 import PurchaseToast from './components/PurchaseToast';
 import WelcomeModal from './components/WelcomeModal';
-import VirtualJoystick from './components/VirtualJoystick';
-import { LISTINGS_DATA } from './listingsData';
 import CloverChat from './components/CloverChat';
 import CloverChatButton from './components/CloverChatButton';
-import { INITIAL_SYSTEM_PROMPT, MYSTERY_SPECIMEN_IMAGE_URL } from './constants';
+import { INITIAL_SYSTEM_PROMPT } from './constants';
 import LiveAssistButton from './components/LiveAssistButton';
 import LiveAssistModal from './components/LiveAssistModal';
 
@@ -42,18 +40,6 @@ const MOCK_STORE: StoreItem[] = [
 
 const USER_STORAGE_KEY = 'rockhound-go-user';
 const GAME_STATE_STORAGE_KEY = 'rockhound-go-gamestate';
-const MAP_WIDTH = 3000;
-const MAP_HEIGHT = 3000;
-const PLAYER_SPEED = 5;
-
-const fileToDataUrl = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-    });
-};
 
 // A utility to get a user-friendly error message from a geolocation error.
 const getGeolocationErrorMessage = (error: GeolocationPositionError): string => {
@@ -84,20 +70,15 @@ const App: React.FC = () => {
   const [achievementNotifications, setAchievementNotifications] = useState<Achievement[]>([]);
   const [purchasedItems, setPurchasedItems] = useState<Set<string>>(new Set());
   const [purchaseNotifications, setPurchaseNotifications] = useState<StoreItem[]>([]);
-  const [listings, setListings] = useState<LandListing[]>(LISTINGS_DATA);
-  const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
+  const [listings, setListings] = useState<MarketplaceListing[]>([]);
+  const [selectedListing, setSelectedListing] = useState<MarketplaceListing | null>(null);
   const [isNewListingModalOpen, setIsNewListingModalOpen] = useState(false);
-  const [playerPosition, setPlayerPosition] = useState({ x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const [isCloverChatOpen, setIsCloverChatOpen] = useState(false);
   const [isLiveAssistOpen, setIsLiveAssistOpen] = useState(false);
-  const [userMarkers, setUserMarkers] = useState<MapFeature[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const keysPressed = useRef(new Set<string>());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // FIX: Initialize useRef with null to address the "Expected 1 arguments, but got 0" error. This is safer for refs that will hold DOM request IDs.
-  const animationFrameId = useRef<number | null>(null);
 
   useEffect(() => {
     const playJingle = () => {
@@ -134,9 +115,7 @@ const App: React.FC = () => {
                 setJournalEntries(gameState.journalEntries || []);
                 setUnlockedAchievements(new Set(gameState.unlockedAchievements || []));
                 setPurchasedItems(new Set(gameState.purchasedItems || []));
-                setListings(gameState.listings || LISTINGS_DATA);
-                setPlayerPosition(gameState.playerPosition || { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 });
-                setUserMarkers(gameState.userMarkers || []);
+                setListings(gameState.listings || []);
             } catch (e) {
                 console.error("Failed to parse saved game state, starting fresh.", e);
             }
@@ -194,14 +173,12 @@ const App: React.FC = () => {
               unlockedAchievements: Array.from(unlockedAchievements),
               purchasedItems: Array.from(purchasedItems),
               listings,
-              playerPosition,
-              userMarkers,
           };
           localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(gameState));
       } catch (error) {
           console.error("Failed to save game state:", error);
       }
-  }, [collectionScore, journalEntries, unlockedAchievements, purchasedItems, listings, playerPosition, userMarkers, user]);
+  }, [collectionScore, journalEntries, unlockedAchievements, purchasedItems, listings, user]);
 
 
   // Get user location for weather and gameplay
@@ -229,44 +206,6 @@ const App: React.FC = () => {
         }
     );
   }, []);
-
-  // Player Movement Game Loop
-  const gameLoop = useCallback(() => {
-      setPlayerPosition(prevPosition => {
-          let { x, y } = prevPosition;
-          const currentKeys = keysPressed.current;
-
-          if (currentKeys.has('ArrowUp') || currentKeys.has('w')) y -= PLAYER_SPEED;
-          if (currentKeys.has('ArrowDown') || currentKeys.has('s')) y += PLAYER_SPEED;
-          if (currentKeys.has('ArrowLeft') || currentKeys.has('a')) x -= PLAYER_SPEED;
-          if (currentKeys.has('ArrowRight') || currentKeys.has('d')) x += PLAYER_SPEED;
-          
-          x = Math.max(0, Math.min(MAP_WIDTH, x));
-          y = Math.max(0, Math.min(MAP_HEIGHT, y));
-
-          return { x, y };
-      });
-      animationFrameId.current = requestAnimationFrame(gameLoop);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => keysPressed.current.add(e.key);
-    const handleKeyUp = (e: KeyboardEvent) => keysPressed.current.delete(e.key);
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    
-    animationFrameId.current = requestAnimationFrame(gameLoop);
-
-    return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('keyup', handleKeyUp);
-        if (animationFrameId.current) {
-            cancelAnimationFrame(animationFrameId.current);
-        }
-    };
-  }, [gameLoop]);
-
 
   // Achievement checking logic
   useEffect(() => {
@@ -369,26 +308,50 @@ const App: React.FC = () => {
           });
         }
         
-        const scoreMatch = fullResponseText.match(/\[SCORE=(\d+)\]/);
-        const nameMatch = fullResponseText.match(/\[NAME=(.*?)\]/);
-        const rarityMatch = fullResponseText.match(/\[RARITY=(.*?)\]/);
+        const jsonMatch = fullResponseText.match(/\[IDENTIFICATION_JSON=(.*)\]/);
 
-        if (scoreMatch?.[1] && nameMatch?.[1] && rarityMatch?.[1] && persistentImageUrls?.[0]) {
-            const newTotalScore = parseInt(scoreMatch[1], 10);
-            const scoreAwarded = newTotalScore - collectionScore;
-            
-            const newEntry: JournalEntry = {
-                id: new Date().toISOString() + Math.random(),
-                name: nameMatch[1],
-                score: scoreAwarded > 0 ? scoreAwarded : 0,
-                description: fullResponseText.replace(/\[SCORE=.*?\]|\[NAME=.*?\]|\[RARITY=.*?\]/g, '').trim(),
-                imageUrl: persistentImageUrls[0],
-                date: new Date().toISOString(),
-                rarity: rarityMatch[1] as Rarity || 'Unknown',
-            };
-            
-            setJournalEntries(prev => [newEntry, ...prev]);
-            setCollectionScore(newTotalScore);
+        if (jsonMatch?.[1] && persistentImageUrls?.[0]) {
+            try {
+                const identificationData = JSON.parse(jsonMatch[1]);
+                const { name, rarity, score, mineralComposition, hardness, geologicalContext } = identificationData;
+
+                const newTotalScore = parseInt(score, 10);
+                const scoreAwarded = newTotalScore - collectionScore;
+
+                // Clean the conversational part of the response for display
+                const conversationalText = fullResponseText.replace(/\[IDENTIFICATION_JSON=.*\]/g, '').trim();
+
+                const newEntry: JournalEntry = {
+                    id: new Date().toISOString() + Math.random(),
+                    name: name,
+                    score: scoreAwarded > 0 ? scoreAwarded : 0,
+                    description: conversationalText,
+                    imageUrl: persistentImageUrls[0],
+                    date: new Date().toISOString(),
+                    rarity: rarity as Rarity || 'Unknown',
+                    mineralComposition,
+                    hardness,
+                    geologicalContext,
+                };
+
+                // Add to journal and update score
+                setJournalEntries(prev => [newEntry, ...prev]);
+                setCollectionScore(newTotalScore);
+
+                // Update the last message to include the structured data for the UI
+                setGameMessages(prev => {
+                    const newMessages = [...prev];
+                    const lastMessage = newMessages[newMessages.length - 1];
+                    lastMessage.text = conversationalText;
+                    lastMessage.identification = newEntry;
+                    return newMessages;
+                });
+
+            } catch (e) {
+                console.error("Failed to parse identification JSON from AI response:", e);
+                // Handle cases where JSON is malformed, maybe set an error state
+                 setError("Received a malformed analysis from the AI. Please try again.");
+            }
         }
 
     } catch (err) {
@@ -407,28 +370,6 @@ const App: React.FC = () => {
         }
     }
   };
-  
-  const handleChallengeRequest = () => {
-      const challengePrompt = "Give me a new challenge based on my current location.";
-      handleSendMessage(challengePrompt);
-      setCurrentView('identify');
-  }
-  
-  const handleOnScreenMove = (direction: 'up' | 'down' | 'left' | 'right') => {
-        setPlayerPosition(prevPosition => {
-            let { x, y } = prevPosition;
-            const moveAmount = PLAYER_SPEED * 1.5; // Make joystick slightly faster than key press
-            switch (direction) {
-                case 'up': y -= moveAmount; break;
-                case 'down': y += moveAmount; break;
-                case 'left': x -= moveAmount; break;
-                case 'right': x += moveAmount; break;
-            }
-            x = Math.max(0, Math.min(MAP_WIDTH, x));
-            y = Math.max(0, Math.min(MAP_HEIGHT, y));
-            return { x, y };
-        });
-    };
 
   const handlePurchase = (item: StoreItem) => {
       if (collectionScore >= item.price && !purchasedItems.has(item.id)) {
@@ -457,51 +398,59 @@ const App: React.FC = () => {
     setUser(newUser);
   };
   
-  const handleCreateListing = async (newListingData: Omit<LandListing, 'id' | 'image'>, imageFile: File) => {
-    const imageUrl = await fileToDataUrl(imageFile);
-    const newListing: LandListing = {
-        ...newListingData,
-        id: new Date().toISOString() + Math.random(),
-        image: imageUrl,
+  const handleCreateListing = (itemToList: JournalEntry, price: number) => {
+    if (!user) return; // Should not happen if the modal is accessible
+
+    const newListing: MarketplaceListing = {
+        listingId: `listing-${Date.now()}`,
+        seller: {
+            name: user.name,
+            avatarId: user.avatarId,
+        },
+        item: itemToList,
+        price: price,
+        listedDate: new Date().toISOString(),
     };
+
     setListings(prev => [newListing, ...prev]);
+    // Optional: Remove the item from the user's journal so it can't be listed twice
+    setJournalEntries(prev => prev.filter(entry => entry.id !== itemToList.id));
     setIsNewListingModalOpen(false);
   };
-  
-  const handleTradeComplete = (userGave: JournalEntry, userReceived: JournalEntry) => {
-    setJournalEntries(prev => {
-        // Remove the item the user gave away
-        const filtered = prev.filter(entry => entry.id !== userGave.id);
-        // Add the item the user received
-        return [userReceived, ...filtered];
-    });
 
-    // Adjust score based on the difference in item values
-    setCollectionScore(prev => prev - userGave.score + userReceived.score);
+  const handlePurchaseListing = (listingToBuy: MarketplaceListing) => {
+    if (!user) return;
+
+    if (collectionScore >= listingToBuy.price) {
+        // Deduct cost
+        setCollectionScore(prev => prev - listingToBuy.price);
+
+        // Add item to journal
+        setJournalEntries(prev => [listingToBuy.item, ...prev]);
+
+        // Remove listing from marketplace
+        setListings(prev => prev.filter(l => l.listingId !== listingToBuy.listingId));
+
+        // Close the modal
+        setSelectedListing(null);
+
+        // Optional: Could add a success toast here
+        alert(`Successfully purchased ${listingToBuy.item.name}!`);
+    } else {
+        alert("You don't have enough points to purchase this item.");
+    }
   };
-
-  const handleFindSpecimen = (specimenData: InvestigationFind) => {
-    const newEntry: JournalEntry = {
-        ...specimenData,
-        id: new Date().toISOString() + Math.random(),
-        date: new Date().toISOString(),
-        imageUrl: MYSTERY_SPECIMEN_IMAGE_URL,
-    };
-    setJournalEntries(prev => [newEntry, ...prev]);
-    setCollectionScore(prev => prev + newEntry.score);
-  };
-
 
   const dismissAchievementNotification = (id: string) => {
     setAchievementNotifications(prev => prev.filter(ach => ach.id !== id));
   }
 
-  const dismissPurchaseNotification = (id: string) => {
+  const dismissPurchaseNotification = (id:string) => {
     setPurchaseNotifications(prev => prev.filter(item => item.id !== id));
   }
 
   const generateScreenContext = (): string => {
-        let context = `Current View: ${currentView}. Score: ${collectionScore}. Player Position on Map: (x: ${Math.round(playerPosition.x)}, y: ${Math.round(playerPosition.y)}).`;
+        let context = `Current View: ${currentView}. Score: ${collectionScore}.`;
         if (currentView === 'journal') {
             context += ` There are ${journalEntries.length} items in the journal.`;
         }
@@ -509,7 +458,7 @@ const App: React.FC = () => {
             context += ` The current location is ${currentLocation ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}` : 'unknown'}.`;
         }
         if (selectedListing) {
-            context += ` Currently viewing listing: ${selectedListing.propertyName}.`;
+            context += ` Currently viewing listing: ${selectedListing.item.name}.`;
         }
         return context;
     };
@@ -518,24 +467,12 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'map':
         return <MapScreen 
-                  onChallengeRequest={handleChallengeRequest} 
-                  playerPosition={playerPosition}
-                  mapWidth={MAP_WIDTH}
-                  mapHeight={MAP_HEIGHT}
-                  avatarId={user!.avatarId}
                   currentLocation={currentLocation}
-                  userMarkers={userMarkers}
-                  setUserMarkers={setUserMarkers}
-                  onFindSpecimen={handleFindSpecimen}
                 />;
       case 'journal':
         return <JournalScreen entries={journalEntries} onNavigate={() => setCurrentView('identify')} />;
-      case 'trade':
-        return <TradeScreen
-                    userJournal={journalEntries}
-                    onTradeComplete={handleTradeComplete}
-                    chatSession={chatSession}
-                />;
+      case 'learn':
+        return <LearningCenter />;
       case 'listings':
         return <ListingsScreen 
                     listings={listings} 
@@ -597,12 +534,11 @@ const App: React.FC = () => {
       <Header score={collectionScore} avatarId={user.avatarId} />
       <main className="flex-1 overflow-hidden relative">
         {renderCurrentView()}
-        {currentView === 'map' && <VirtualJoystick onMove={handleOnScreenMove} />}
       </main>
       <BottomNav currentView={currentView} setCurrentView={setCurrentView} onIdentifyClick={triggerFileInput} />
       {isLoading && <LoadingOverlay />}
-      {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} />}
-      {isNewListingModalOpen && <NewListingModal onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}
+      {selectedListing && <ListingDetailModal listing={selectedListing} onClose={() => setSelectedListing(null)} onPurchase={handlePurchaseListing} />}
+      {isNewListingModalOpen && <NewListingModal userJournal={journalEntries} onCreateListing={handleCreateListing} onClose={() => setIsNewListingModalOpen(false)} />}
       <CloverChatButton onClick={() => setIsCloverChatOpen(true)} />
       <LiveAssistButton onClick={() => setIsLiveAssistOpen(true)} />
       {isCloverChatOpen && <CloverChat user={user} onClose={() => setIsCloverChatOpen(false)} />}
