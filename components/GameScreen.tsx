@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { GameMessage, MessageAuthor } from '../types';
+import IdentificationCard from './IdentificationCard';
 
 interface GameScreenProps {
   gameMessages: GameMessage[];
@@ -34,11 +35,17 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMessages }) => {
         )
     }
 
+    // AI Message
     return (
         <div key={index} className="flex justify-start mb-4 animate-fade-in">
-            <p className="bg-slate-800 rounded-lg px-4 py-2 max-w-xl whitespace-pre-wrap leading-relaxed">
-                {msg.text}{index === gameMessages.length - 1 && <span className="inline-block w-2 h-4 bg-emerald-400 ml-1 animate-pulse"></span>}
-            </p>
+            <div className="bg-slate-800 rounded-lg px-4 py-2 max-w-xl">
+                <p className="whitespace-pre-wrap leading-relaxed">
+                    {msg.text}
+                    {/* Show pulsing cursor only if it's the last message and no identification card is present */}
+                    {index === gameMessages.length - 1 && !msg.identification && <span className="inline-block w-2 h-4 bg-emerald-400 ml-1 animate-pulse"></span>}
+                </p>
+                {msg.identification && <IdentificationCard data={msg.identification} />}
+            </div>
         </div>
     );
   }
